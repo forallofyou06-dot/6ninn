@@ -1,0 +1,2 @@
+- [Clerk + Vite setup](clerk-vite.md) — @clerk/react must be installed in the artifact package, not workspace root; tailwindcss({ optimize: false }) required to prevent CSS layer conflicts.
+- [API routing conventions](api-routing.md) — my/* routes live in my.ts router, not applications.ts; applications.ts only handles /:id/apply and /:id/cancel.

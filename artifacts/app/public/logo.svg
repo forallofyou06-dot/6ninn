@@ -1,0 +1,5 @@
+<svg xmlns="http://www. কণ্ঠে/2000/svg" viewBox="0 0 120 120">
+  <circle cx="60" cy="60" r="50" fill="#D98363" opacity="0.1"/>
+  <path d="M 45 40 L 75 40 L 75 80 L 45 80 Z" fill="none" stroke="#D98363" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/>
+  <circle cx="60" cy="60" r="8" fill="#D98363"/>
+</svg>

@@ -3,20 +3,27 @@ info:
   # Do not change the title, if the title changes, the import paths will be broken
   title: Api
   version: 0.1.0
-  description: API specification
+  description: API specification for 偶然の6人 - small gathering management app
 servers:
   - url: /api
     description: Base API path
 tags:
   - name: health
     description: Health operations
+  - name: events
+    description: Event (gathering) operations
+  - name: applications
+    description: Event application operations
+  - name: reports
+    description: Post-event report operations
+  - name: users
+    description: User profile operations
 paths:
   /healthz:
     get:
       operationId: healthCheck
       tags: [health]
       summary: Health check
-      description: Returns server health status
       responses:
         "200":
           description: Healthy
@@ -24,6 +31,328 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/HealthStatus"
+
+  /users/me:
+    get:
+      operationId: getMe
+      tags: [users]
+      summary: Get current user profile
+      responses:
+        "200":
+          description: Current user profile
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/UserProfile"
+        "401":
+          description: Unauthorized
+    patch:
+      operationId: updateMe
+      tags: [users]
+      summary: Update current user profile
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UserProfileUpdate"
+      responses:
+        "200":
+          description: Updated profile
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/UserProfile"
+        "401":
+          description: Unauthorized
+
+  /events:
+    get:
+      operationId: listEvents
+      tags: [events]
+      summary: List open events
+      parameters:
+        - name: status
+          in: query
+          schema:
+            type: string
+            enum: [open, closed, all]
+          description: Filter by status
+        - name: tag
+          in: query
+          schema:
+            type: string
+          description: Filter by tag
+      responses:
+        "200":
+          description: List of events
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Event"
+    post:
+      operationId: createEvent
+      tags: [events]
+      summary: Create a new event
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/EventInput"
+      responses:
+        "201":
+          description: Created event
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Event"
+        "400":
+          description: Validation error
+        "401":
+          description: Unauthorized
+
+  /events/{id}:
+    get:
+      operationId: getEvent
+      tags: [events]
+      summary: Get event detail
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Event detail
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Event"
+        "404":
+          description: Not found
+    patch:
+      operationId: updateEvent
+      tags: [events]
+      summary: Update an event (host only)
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/EventUpdate"
+      responses:
+        "200":
+          description: Updated event
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Event"
+        "401":
+          description: Unauthorized
+        "403":
+          description: Forbidden
+        "404":
+          description: Not found
+    delete:
+      operationId: deleteEvent
+      tags: [events]
+      summary: Delete an event (host only)
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "204":
+          description: Deleted
+        "401":
+          description: Unauthorized
+        "403":
+          description: Forbidden
+
+  /events/{id}/apply:
+    post:
+      operationId: applyToEvent
+      tags: [applications]
+      summary: Apply to an event (first-come-first-served)
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "201":
+          description: Application created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Application"
+        "400":
+          description: Event full or already applied
+        "401":
+          description: Unauthorized
+        "404":
+          description: Event not found
+
+  /events/{id}/cancel:
+    post:
+      operationId: cancelApplication
+      tags: [applications]
+      summary: Cancel my application to an event
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Application cancelled
+        "400":
+          description: No application to cancel
+        "401":
+          description: Unauthorized
+
+  /events/{id}/report:
+    get:
+      operationId: getEventReport
+      tags: [reports]
+      summary: Get the post-event report
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Report
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EventReport"
+        "404":
+          description: Not found
+    post:
+      operationId: createReport
+      tags: [reports]
+      summary: Host posts the event report
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ReportInput"
+      responses:
+        "201":
+          description: Report created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EventReport"
+        "400":
+          description: Validation error
+        "401":
+          description: Unauthorized
+        "403":
+          description: Forbidden
+
+  /events/{id}/comments:
+    post:
+      operationId: addComment
+      tags: [reports]
+      summary: Participant posts a one-line comment on a report
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CommentInput"
+      responses:
+        "201":
+          description: Comment added
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Comment"
+        "400":
+          description: Validation error
+        "401":
+          description: Unauthorized
+
+  /my/applications:
+    get:
+      operationId: listMyApplications
+      tags: [applications]
+      summary: List my event applications
+      responses:
+        "200":
+          description: My applications
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/ApplicationWithEvent"
+        "401":
+          description: Unauthorized
+
+  /my/hosted-events:
+    get:
+      operationId: listMyHostedEvents
+      tags: [events]
+      summary: List events I host
+      responses:
+        "200":
+          description: Events I host
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Event"
+        "401":
+          description: Unauthorized
+
+  /my/stats:
+    get:
+      operationId: getMyStats
+      tags: [users]
+      summary: Get my activity stats
+      responses:
+        "200":
+          description: My stats
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/UserStats"
+        "401":
+          description: Unauthorized
+
 components:
   schemas:
     HealthStatus:
@@ -34,3 +363,287 @@ components:
       required:
         - status
 
+    UserProfile:
+      type: object
+      properties:
+        id:
+          type: integer
+        clerkUserId:
+          type: string
+        displayName:
+          type: string
+        email:
+          type: string
+        tags:
+          type: array
+          items:
+            type: string
+        createdAt:
+          type: string
+      required:
+        - id
+        - clerkUserId
+        - displayName
+        - email
+        - tags
+        - createdAt
+
+    UserProfileUpdate:
+      type: object
+      properties:
+        displayName:
+          type: string
+        tags:
+          type: array
+          items:
+            type: string
+
+    UserStats:
+      type: object
+      properties:
+        participated:
+          type: integer
+        hosted:
+          type: integer
+        connections:
+          type: integer
+      required:
+        - participated
+        - hosted
+        - connections
+
+    Event:
+      type: object
+      properties:
+        id:
+          type: integer
+        theme:
+          type: string
+        subTheme:
+          type: ["string", "null"]
+        dateStart:
+          type: string
+        dateEnd:
+          type: string
+        location:
+          type: string
+        locationUrl:
+          type: ["string", "null"]
+        fee:
+          type: integer
+        capacity:
+          type: integer
+        tags:
+          type: array
+          items:
+            type: string
+        hostId:
+          type: integer
+        hostName:
+          type: string
+        applicantsCount:
+          type: integer
+        remainingSeats:
+          type: integer
+        status:
+          type: string
+          enum: [open, closed, ended]
+        isApplied:
+          type: boolean
+        createdAt:
+          type: string
+      required:
+        - id
+        - theme
+        - dateStart
+        - dateEnd
+        - location
+        - fee
+        - capacity
+        - tags
+        - hostId
+        - hostName
+        - applicantsCount
+        - remainingSeats
+        - status
+        - isApplied
+        - createdAt
+
+    EventInput:
+      type: object
+      properties:
+        theme:
+          type: string
+          minLength: 1
+        subTheme:
+          type: string
+        dateStart:
+          type: string
+        dateEnd:
+          type: string
+        location:
+          type: string
+          minLength: 1
+        locationUrl:
+          type: string
+        fee:
+          type: integer
+          minimum: 0
+          maximum: 5000
+        capacity:
+          type: integer
+          minimum: 1
+          maximum: 6
+        tags:
+          type: array
+          items:
+            type: string
+      required:
+        - theme
+        - dateStart
+        - dateEnd
+        - location
+        - fee
+        - capacity
+        - tags
+
+    EventUpdate:
+      type: object
+      properties:
+        theme:
+          type: string
+        subTheme:
+          type: string
+        dateStart:
+          type: string
+        dateEnd:
+          type: string
+        location:
+          type: string
+        locationUrl:
+          type: string
+        fee:
+          type: integer
+          minimum: 0
+          maximum: 5000
+        capacity:
+          type: integer
+          minimum: 1
+          maximum: 6
+        tags:
+          type: array
+          items:
+            type: string
+
+    Application:
+      type: object
+      properties:
+        id:
+          type: integer
+        eventId:
+          type: integer
+        userId:
+          type: integer
+        status:
+          type: string
+          enum: [active, cancelled]
+        createdAt:
+          type: string
+      required:
+        - id
+        - eventId
+        - userId
+        - status
+        - createdAt
+
+    ApplicationWithEvent:
+      type: object
+      properties:
+        id:
+          type: integer
+        eventId:
+          type: integer
+        status:
+          type: string
+          enum: [active, cancelled]
+        createdAt:
+          type: string
+        event:
+          $ref: "#/components/schemas/Event"
+      required:
+        - id
+        - eventId
+        - status
+        - createdAt
+        - event
+
+    EventReport:
+      type: object
+      properties:
+        id:
+          type: integer
+        eventId:
+          type: integer
+        photoUrl:
+          type: ["string", "null"]
+        reportText:
+          type: string
+        likesCount:
+          type: integer
+        comments:
+          type: array
+          items:
+            $ref: "#/components/schemas/Comment"
+        createdAt:
+          type: string
+      required:
+        - id
+        - eventId
+        - reportText
+        - likesCount
+        - comments
+        - createdAt
+
+    ReportInput:
+      type: object
+      properties:
+        photoUrl:
+          type: string
+        reportText:
+          type: string
+          minLength: 1
+      required:
+        - reportText
+
+    Comment:
+      type: object
+      properties:
+        id:
+          type: integer
+        reportId:
+          type: integer
+        authorId:
+          type: integer
+        authorName:
+          type: string
+        text:
+          type: string
+        createdAt:
+          type: string
+      required:
+        - id
+        - reportId
+        - authorId
+        - authorName
+        - text
+        - createdAt
+
+    CommentInput:
+      type: object
+      properties:
+        text:
+          type: string
+          minLength: 1
+          maxLength: 200
+      required:
+        - text
