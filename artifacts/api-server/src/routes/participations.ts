@@ -1,5 +1,5 @@
 import { Router } from "express";
-import { db, usersTable, eventsTable, participationsTable } from "@workspace/db";
+import { db, usersTable, eventsTable, participationsTable, notificationsTable } from "@workspace/db";
 import { eq, and, sql } from "drizzle-orm";
 import { requireAuth } from "../middlewares/requireAuth";
 import { getOrCreateUser } from "../lib/getOrCreateUser";
@@ -18,10 +18,12 @@ router.post("/:id/apply", requireAuth, async (req, res) => {
     if (!events.length) { res.status(404).json({ error: "会が見つかりません" }); return; }
     const event = events[0];
     if (event.status !== "募集中") { res.status(400).json({ error: "この会は現在申し込めません" }); return; }
+    if (event.hostId === user.id) { res.status(400).json({ error: "ホストは自分の会に申し込めません" }); return; }
     const [partCount] = await db.select({ count: sql<number>`count(*)` })
       .from(participationsTable)
       .where(and(eq(participationsTable.eventId, eventId), eq(participationsTable.status, "申込")));
-    if (Number(partCount?.count ?? 0) >= event.capacity) {
+    // ホストが1席占めるため、参加者は capacity - 1 まで
+    if (Number(partCount?.count ?? 0) >= event.capacity - 1) {
       res.status(400).json({ error: "定員に達しています" }); return;
     }
     const existing = await db.select().from(participationsTable)
@@ -30,16 +32,25 @@ router.post("/:id/apply", requireAuth, async (req, res) => {
       res.status(400).json({ error: "すでに申し込み済みです" }); return;
     }
     const { comment } = req.body;
+    let part;
     if (existing.length > 0) {
       const [updated] = await db.update(participationsTable)
         .set({ status: "申込", comment: comment || null, appliedAt: new Date(), cancelledAt: null })
         .where(eq(participationsTable.id, existing[0].id)).returning();
-      res.status(201).json(updated);
+      part = updated;
     } else {
-      const [part] = await db.insert(participationsTable)
+      const [inserted] = await db.insert(participationsTable)
         .values({ eventId, userId: user.id, comment: comment || null, status: "申込" }).returning();
-      res.status(201).json(part);
+      part = inserted;
     }
+    // ホストに申込通知を送る
+    const applierName = user.name || user.email || "参加者";
+    await db.insert(notificationsTable).values({
+      userId: event.hostId,
+      type: "apply",
+      content: `${applierName}さんが「${event.theme}」に申し込みました`,
+    });
+    res.status(201).json(part);
   } catch (err) {
     req.log.error({ err }, "applyToEvent error");
     res.status(500).json({ error: "Internal server error" });
@@ -65,6 +76,13 @@ router.post("/:id/cancel", requireAuth, async (req, res) => {
     await db.update(participationsTable)
       .set({ status: "キャンセル", cancelledAt: new Date() })
       .where(eq(participationsTable.id, parts[0].id));
+    // ホストにキャンセル通知を送る
+    const cancellerName = user.name || user.email || "参加者";
+    await db.insert(notificationsTable).values({
+      userId: event.hostId,
+      type: "cancel",
+      content: `${cancellerName}さんが「${event.theme}」への参加をキャンセルしました`,
+    });
     res.json({ message: "キャンセルしました" });
   } catch (err) {
     req.log.error({ err }, "cancelParticipation error");

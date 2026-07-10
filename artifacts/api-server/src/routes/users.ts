@@ -37,12 +37,11 @@ router.get("/me", requireAuth, async (req, res) => {
 router.patch("/me", requireAuth, async (req, res) => {
   try {
     const clerkUserId = (req as any).clerkUserId;
-    const { name, department, interestTags, role } = req.body;
+    const { name, department, interestTags } = req.body;
     const updates: Record<string, unknown> = {};
     if (name !== undefined) updates.name = name;
     if (department !== undefined) updates.department = department;
     if (interestTags !== undefined) updates.interestTags = interestTags;
-    if (role !== undefined) updates.role = role;
     const [updated] = await db
       .update(usersTable)
       .set(updates)

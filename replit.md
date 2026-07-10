@@ -25,7 +25,7 @@
 
 ## Where things live
 
-- `lib/db/src/schema/index.ts` — DB schema (users, events, applications, reports, comments)
+- `lib/db/src/schema/index.ts` — DB schema (users, events, participations, reports, likes, notifications, feedbacks)
 - `lib/api-spec/openapi.yaml` — OpenAPI spec (source of truth for API contract)
 - `lib/api-client-react/src/generated/` — generated React Query hooks + Zod schemas
 - `artifacts/api-server/src/routes/` — Express route handlers
@@ -35,10 +35,15 @@
 ## Architecture decisions
 
 - **Contract-first API**: OpenAPI spec → Orval codegen → typed hooks. Never write fetch calls by hand.
-- **Clerk auth**: Magic link (email only). Domain restriction enforced server-side in `requireAuth.ts` — only `@0101.co.jp` addresses pass.
+- **Clerk auth**: Magic link (email only). メールドメイン制限はコード上未実装（Clerk ダッシュボード側で制御する想定）。
 - **JIT user provisioning**: `getOrCreateUser()` creates a DB user on first authenticated request using Clerk identity data.
-- **My routes**: `GET /api/my/applications`, `/api/my/hosted-events`, `/api/my/stats` are in `my.ts` router (not applications.ts). applications.ts only has `/:id/apply` and `/:id/cancel`.
-- **6人以内・2時間以内・5000円以内**: Business constraints validated in both frontend (Zod schema) and intended for server-side enforcement.
+- **My routes**: `GET /api/my/applications`, `/api/my/hosted-events`, `/api/my/stats` are in `my.ts` router. participations.ts only has `/:id/apply` and `/:id/cancel`.
+- **定員はホスト含む6人**: capacity フィールドはホストを含む総定員。参加者上限は capacity-1。サーバー・フロント両方で検証済み。
+- **role 変更は不可**: `PATCH /users/me` では name/department/interestTags のみ更新可。role はサーバー側で除外。
+- **いいね**: `POST /reports/:id/like` でトグル。likesTable は targetType/targetId のポリモーフィック設計。
+- **通知生成**: 申込・キャンセル時にホストへ自動通知（participations.ts）。
+- **レポート権限**: host タイプ投稿はホストのみ、participant タイプは申込済み参加者のみ。
+- **6人以内・2時間以内・5000円以内**: Business constraints validated in both frontend (Zod schema) and server-side.
 
 ## Product
 

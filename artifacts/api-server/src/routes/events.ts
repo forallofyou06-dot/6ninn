@@ -9,7 +9,7 @@ import { buildEventResponse } from "./eventBuilder";
 
 const router = Router();
 
-router.get("/", async (req, res) => {
+router.get("/", requireAuth, async (req, res) => {
   try {
     const { status, tag, sortBy } = req.query as { status?: string; tag?: string; sortBy?: string };
     const clerkUserId = (req as any).clerkUserId;
@@ -60,7 +60,7 @@ router.post("/", requireAuth, async (req, res) => {
       res.status(400).json({ error: "Missing required fields" }); return;
     }
     if (fee > 5000) { res.status(400).json({ error: "会費は5,000円以内" }); return; }
-    if (capacity > 6 || capacity < 3) { res.status(400).json({ error: "定員は3〜6人" }); return; }
+    if (capacity > 6 || capacity < 2) { res.status(400).json({ error: "定員は2〜6人（ホスト含む）" }); return; }
     if (durationMinutes > 120) { res.status(400).json({ error: "開催時間は2時間以内" }); return; }
     const [event] = await db.insert(eventsTable).values({
       theme, subTheme: subTheme || null,
@@ -78,7 +78,7 @@ router.post("/", requireAuth, async (req, res) => {
   }
 });
 
-router.get("/:id", async (req, res) => {
+router.get("/:id", requireAuth, async (req, res) => {
   try {
     const id = Number(req.params.id);
     if (isNaN(id)) { res.status(400).json({ error: "Invalid id" }); return; }

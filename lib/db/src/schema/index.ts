@@ -7,3 +7,4 @@ export * from "./tags";
 export * from "./eventTags";
 export * from "./notifications";
 export * from "./feedbacks";
+// applicationsTable は participationsTable に統合済み。旧テーブルは参照しない。

@@ -14,7 +14,8 @@ export async function buildEventResponse(
     .where(and(eq(participationsTable.eventId, event.id), eq(participationsTable.status, "申込")));
   const participantsCount = Number(partRow?.count ?? 0);
   const effectiveStatus = await computeAndUpdateStatus(event, participantsCount);
-  const remainingSeats = Math.max(0, event.capacity - participantsCount);
+  // ホストが1席分を占めるため capacity - 1 が参加者の上限
+  const remainingSeats = Math.max(0, event.capacity - 1 - participantsCount);
   let isApplied = false;
   if (currentUserId) {
     const part = await db
