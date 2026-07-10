@@ -35,7 +35,7 @@ export function MobileLayout({ children, hideNav = false }: { children: ReactNod
 
         {!hideNav && (
           <Show when="signed-in">
-            <nav className="absolute bottom-0 w-full h-[64px] bg-background/90 backdrop-blur border-t border-border flex items-center justify-around px-4 pb-safe">
+            <nav className="fixed bottom-0 left-1/2 -translate-x-1/2 w-full max-w-[430px] h-[64px] bg-background/90 backdrop-blur border-t border-border flex items-center justify-around px-4 pb-safe z-50">
               <Link href="/events" className={`flex flex-col items-center gap-1 p-2 ${location === "/events" ? "text-primary" : "text-muted-foreground"}`}>
                 <Home size={24} strokeWidth={1.5} />
                 <span className="text-[10px]">一覧</span>
