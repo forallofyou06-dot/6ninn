@@ -1,5 +1,5 @@
-import { useEffect, useRef } from "react";
-import { ClerkProvider, SignIn, SignUp, Show, useClerk } from '@clerk/react';
+import { useEffect, useRef, useState } from "react";
+import { ClerkProvider, SignIn, SignUp, Show, useClerk, useAuth } from '@clerk/react';
 import { publishableKeyFromHost } from '@clerk/react/internal';
 import { shadcn } from '@clerk/themes';
 import { Switch, Route, Redirect, useLocation, Router as WouterRouter } from 'wouter';
@@ -10,6 +10,7 @@ import { TooltipProvider } from "@/components/ui/tooltip";
 import { MobileLayout } from "@/components/layout/MobileLayout";
 import Landing from "@/pages/landing";
 import NotFound from "@/pages/not-found";
+import Onboarding from "@/pages/onboarding";
 
 import EventsList from "@/pages/events/list";
 import EventDetail from "@/pages/events/detail";
@@ -43,7 +44,6 @@ const clerkAppearance = {
   options: {
     logoPlacement: "inside" as const,
     logoLinkUrl: basePath || "/",
-    logoImageUrl: `${window.location.origin}${basePath}/logo.svg`,
   },
   variables: {
     colorPrimary: "hsl(20 50% 60%)",
@@ -101,9 +101,12 @@ function HomeRedirect() {
 
 function SignInPage() {
   return (
-    <MobileLayout>
+    <MobileLayout hideNav>
       <div className="flex flex-col items-center justify-center min-h-[100dvh] p-4 bg-background">
         <SignIn routing="path" path={`${basePath}/sign-in`} signUpUrl={`${basePath}/sign-up`} />
+        <p className="text-xs text-muted-foreground mt-6 text-center max-w-xs leading-relaxed">
+          社内メールアドレスでの登録を推奨しています
+        </p>
       </div>
     </MobileLayout>
   );
@@ -111,12 +114,44 @@ function SignInPage() {
 
 function SignUpPage() {
   return (
-    <MobileLayout>
+    <MobileLayout hideNav>
       <div className="flex flex-col items-center justify-center min-h-[100dvh] p-4 bg-background">
         <SignUp routing="path" path={`${basePath}/sign-up`} signInUrl={`${basePath}/sign-in`} />
+        <p className="text-xs text-muted-foreground mt-6 text-center max-w-xs leading-relaxed">
+          社内メールアドレスでの登録を推奨しています
+        </p>
       </div>
     </MobileLayout>
   );
+}
+
+function ProfileGuard({ component: Component }: { component: React.ComponentType }) {
+  const { getToken, isSignedIn } = useAuth();
+  const [location, setLocation] = useLocation();
+  const [checked, setChecked] = useState(false);
+
+  useEffect(() => {
+    if (!isSignedIn) return;
+    const check = async () => {
+      try {
+        const token = await getToken();
+        const res = await fetch("/api/users/me", {
+          headers: token ? { Authorization: `Bearer ${token}` } : {},
+        });
+        if (res.ok) {
+          const user = await res.json();
+          if (!user.profileComplete && location !== "/onboarding") {
+            setLocation("/onboarding");
+          }
+        }
+      } catch {}
+      setChecked(true);
+    };
+    check();
+  }, [isSignedIn, getToken]);
+
+  if (!checked) return null;
+  return <Component />;
 }
 
 function ProtectedRoute({ component: Component, ...rest }: any) {
@@ -125,7 +160,7 @@ function ProtectedRoute({ component: Component, ...rest }: any) {
       {() => (
         <>
           <Show when="signed-in">
-            <Component />
+            <ProfileGuard component={Component} />
           </Show>
           <Show when="signed-out">
             <Redirect to="/sign-in" />
@@ -135,7 +170,6 @@ function ProtectedRoute({ component: Component, ...rest }: any) {
     </Route>
   );
 }
-
 
 const queryClient = new QueryClient();
 
@@ -175,13 +209,13 @@ function ClerkProviderWithRoutes() {
         signIn: {
           start: {
             title: "おかえりなさい",
-            subtitle: "サインインして続ける",
+            subtitle: "メールアドレスを入力してください",
           },
         },
         signUp: {
           start: {
-            title: "はじめまして",
-            subtitle: "アカウントを作成する",
+            title: "アカウントを作成",
+            subtitle: "メールアドレスを入力してください",
           },
         },
       }}
@@ -195,16 +229,29 @@ function ClerkProviderWithRoutes() {
             <Route path="/" component={HomeRedirect} />
             <Route path="/sign-in/*?" component={SignInPage} />
             <Route path="/sign-up/*?" component={SignUpPage} />
-            
+
+            <Route path="/onboarding">
+              {() => (
+                <>
+                  <Show when="signed-in">
+                    <Onboarding />
+                  </Show>
+                  <Show when="signed-out">
+                    <Redirect to="/sign-in" />
+                  </Show>
+                </>
+              )}
+            </Route>
+
             <ProtectedRoute path="/events" component={EventsList} />
             <ProtectedRoute path="/events/new" component={EventNew} />
             <ProtectedRoute path="/events/:id/edit" component={EventEdit} />
             <ProtectedRoute path="/events/:id/report" component={EventReport} />
             <ProtectedRoute path="/events/:id" component={EventDetail} />
-            
+
             <ProtectedRoute path="/my" component={MyPage} />
             <ProtectedRoute path="/my/applications" component={MyApplications} />
-            
+
             <Route component={NotFound} />
           </Switch>
           <Toaster />

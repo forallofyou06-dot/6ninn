@@ -6,24 +6,14 @@ import { usersTable } from "./users";
 
 export const reportsTable = pgTable("reports", {
   id: serial("id").primaryKey(),
-  eventId: integer("event_id").notNull().references(() => eventsTable.id).unique(),
+  eventId: integer("event_id").notNull().references(() => eventsTable.id, { onDelete: "cascade" }),
+  authorId: integer("author_id").notNull().references(() => usersTable.id, { onDelete: "cascade" }),
+  type: text("type").notNull(),
+  content: text("content").notNull(),
   photoUrl: text("photo_url"),
-  reportText: text("report_text").notNull(),
-  likesCount: integer("likes_count").notNull().default(0),
   createdAt: timestamp("created_at").notNull().defaultNow(),
 });
 
-export const commentsTable = pgTable("comments", {
-  id: serial("id").primaryKey(),
-  reportId: integer("report_id").notNull().references(() => reportsTable.id),
-  authorId: integer("author_id").notNull().references(() => usersTable.id),
-  text: text("text").notNull(),
-  createdAt: timestamp("created_at").notNull().defaultNow(),
-});
-
-export const insertReportSchema = createInsertSchema(reportsTable).omit({ id: true, createdAt: true, likesCount: true });
-export const insertCommentSchema = createInsertSchema(commentsTable).omit({ id: true, createdAt: true });
+export const insertReportSchema = createInsertSchema(reportsTable).omit({ id: true, createdAt: true });
 export type InsertReport = z.infer<typeof insertReportSchema>;
-export type InsertComment = z.infer<typeof insertCommentSchema>;
 export type Report = typeof reportsTable.$inferSelect;
-export type Comment = typeof commentsTable.$inferSelect;

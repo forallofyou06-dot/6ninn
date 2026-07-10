@@ -1,5 +1,5 @@
 import { Router } from "express";
-import { db, usersTable, eventsTable, applicationsTable } from "@workspace/db";
+import { db, usersTable, eventsTable, participationsTable } from "@workspace/db";
 import { eq, and, sql } from "drizzle-orm";
 import { requireAuth } from "../middlewares/requireAuth";
 import { getOrCreateUser } from "../lib/getOrCreateUser";
@@ -9,34 +9,36 @@ const router = Router();
 
 async function buildEventResponse(event: any, currentUserId: number | null) {
   const host = await db.select().from(usersTable).where(eq(usersTable.id, event.hostId)).limit(1);
-  const [appCount] = await db.select({ count: sql<number>`count(*)` }).from(applicationsTable).where(and(eq(applicationsTable.eventId, event.id), eq(applicationsTable.status, "active")));
-  const applicantsCount = Number(appCount?.count ?? 0);
-  const remainingSeats = Math.max(0, event.capacity - applicantsCount);
+  const [partCount] = await db.select({ count: sql<number>`count(*)` })
+    .from(participationsTable)
+    .where(and(eq(participationsTable.eventId, event.id), eq(participationsTable.status, "申込")));
+  const participantsCount = Number(partCount?.count ?? 0);
+  const remainingSeats = Math.max(0, event.capacity - participantsCount);
   let isApplied = false;
   if (currentUserId) {
-    const app = await db.select().from(applicationsTable).where(and(eq(applicationsTable.eventId, event.id), eq(applicationsTable.userId, currentUserId), eq(applicationsTable.status, "active"))).limit(1);
-    isApplied = app.length > 0;
+    const part = await db.select().from(participationsTable)
+      .where(and(eq(participationsTable.eventId, event.id), eq(participationsTable.userId, currentUserId), eq(participationsTable.status, "申込")))
+      .limit(1);
+    isApplied = part.length > 0;
   }
-  const now = new Date();
-  let status = event.status;
-  if (status === "open" && remainingSeats === 0) status = "closed";
-  if (status === "open" && new Date(event.dateEnd) < now) status = "ended";
   return {
     id: event.id,
     theme: event.theme,
     subTheme: event.subTheme ?? null,
-    dateStart: event.dateStart instanceof Date ? event.dateStart.toISOString() : event.dateStart,
-    dateEnd: event.dateEnd instanceof Date ? event.dateEnd.toISOString() : event.dateEnd,
+    datetime: event.datetime instanceof Date ? event.datetime.toISOString() : event.datetime,
+    durationMinutes: event.durationMinutes,
     location: event.location,
     locationUrl: event.locationUrl ?? null,
     fee: event.fee,
     capacity: event.capacity,
-    tags: event.tags,
+    minParticipants: event.minParticipants,
+    deadline: event.deadline,
+    notes: event.notes ?? null,
     hostId: event.hostId,
-    hostName: host[0]?.displayName ?? "Unknown",
-    applicantsCount,
+    hostName: host[0]?.name ?? host[0]?.email ?? "Unknown",
+    participantsCount,
     remainingSeats,
-    status,
+    status: event.status,
     isApplied,
     createdAt: event.createdAt instanceof Date ? event.createdAt.toISOString() : event.createdAt,
   };
@@ -44,21 +46,16 @@ async function buildEventResponse(event: any, currentUserId: number | null) {
 
 router.get("/", async (req, res) => {
   try {
-    const { status, tag } = req.query;
-    let currentUserId: number | null = null;
+    const { status } = req.query;
     const clerkUserId = (req as any).clerkUserId;
+    let currentUserId: number | null = null;
     if (clerkUserId) {
       const users = await db.select().from(usersTable).where(eq(usersTable.clerkUserId, clerkUserId)).limit(1);
       if (users.length) currentUserId = users[0].id;
     }
-    let events = await db.select().from(eventsTable).orderBy(eventsTable.dateStart);
-    if (tag) {
-      events = events.filter((e) => e.tags.includes(tag as string));
-    }
+    let events = await db.select().from(eventsTable).orderBy(eventsTable.datetime);
     const results = await Promise.all(events.map((e) => buildEventResponse(e, currentUserId)));
-    let filtered = results;
-    if (status === "open") filtered = results.filter((e) => e.status === "open");
-    else if (status === "closed") filtered = results.filter((e) => e.status === "closed");
+    const filtered = status ? results.filter((e) => e.status === status) : results;
     res.json(filtered);
   } catch (err) {
     req.log.error({ err }, "listEvents error");
@@ -70,18 +67,21 @@ router.post("/", requireAuth, async (req, res) => {
   try {
     const clerkUserId = (req as any).clerkUserId;
     const auth = getAuth(req);
-    const email = auth?.sessionClaims?.email as string || "";
-    const name = auth?.sessionClaims?.name as string || (auth?.sessionClaims?.firstName as string) || "";
-    const user = await getOrCreateUser(clerkUserId, email, name);
-    const { theme, subTheme, dateStart, dateEnd, location, locationUrl, fee, capacity, tags } = req.body;
-    if (!theme || !dateStart || !dateEnd || !location || fee === undefined || !capacity) {
+    const email = (auth?.sessionClaims?.email as string) || "";
+    const user = await getOrCreateUser(clerkUserId, email);
+    const { theme, subTheme, datetime, durationMinutes, location, locationUrl, fee, capacity, minParticipants, deadline, notes } = req.body;
+    if (!theme || !datetime || !location || fee === undefined || !capacity || !deadline) {
       res.status(400).json({ error: "Missing required fields" }); return;
     }
-    if (fee > 5000) { res.status(400).json({ error: "Fee must be 5000 or less" }); return; }
-    if (capacity > 6) { res.status(400).json({ error: "Capacity must be 6 or less" }); return; }
+    if (fee > 5000) { res.status(400).json({ error: "会費は5,000円以内" }); return; }
+    if (capacity > 6 || capacity < 2) { res.status(400).json({ error: "定員は2〜6人" }); return; }
     const [event] = await db.insert(eventsTable).values({
-      theme, subTheme: subTheme || null, dateStart: new Date(dateStart), dateEnd: new Date(dateEnd),
-      location, locationUrl: locationUrl || null, fee, capacity, tags: tags || [], hostId: user.id, status: "open",
+      theme, subTheme: subTheme || null,
+      datetime: new Date(datetime), durationMinutes: durationMinutes || 120,
+      location, locationUrl: locationUrl || null,
+      fee, capacity, minParticipants: minParticipants || 2,
+      deadline, notes: notes || null,
+      hostId: user.id, status: "募集中",
     }).returning();
     const response = await buildEventResponse(event, user.id);
     res.status(201).json(response);
@@ -103,8 +103,7 @@ router.get("/:id", async (req, res) => {
     }
     const events = await db.select().from(eventsTable).where(eq(eventsTable.id, id)).limit(1);
     if (!events.length) { res.status(404).json({ error: "Not found" }); return; }
-    const response = await buildEventResponse(events[0], currentUserId);
-    res.json(response);
+    res.json(await buildEventResponse(events[0], currentUserId));
   } catch (err) {
     req.log.error({ err }, "getEvent error");
     res.status(500).json({ error: "Internal server error" });
@@ -116,26 +115,26 @@ router.patch("/:id", requireAuth, async (req, res) => {
     const id = Number(req.params.id);
     const clerkUserId = (req as any).clerkUserId;
     const auth = getAuth(req);
-    const email = auth?.sessionClaims?.email as string || "";
-    const name = auth?.sessionClaims?.name as string || (auth?.sessionClaims?.firstName as string) || "";
-    const user = await getOrCreateUser(clerkUserId, email, name);
+    const email = (auth?.sessionClaims?.email as string) || "";
+    const user = await getOrCreateUser(clerkUserId, email);
     const events = await db.select().from(eventsTable).where(eq(eventsTable.id, id)).limit(1);
     if (!events.length) { res.status(404).json({ error: "Not found" }); return; }
     if (events[0].hostId !== user.id) { res.status(403).json({ error: "Forbidden" }); return; }
-    const { theme, subTheme, dateStart, dateEnd, location, locationUrl, fee, capacity, tags } = req.body;
-    const updates: any = {};
+    const { theme, subTheme, datetime, durationMinutes, location, locationUrl, fee, capacity, minParticipants, deadline, notes } = req.body;
+    const updates: Record<string, unknown> = {};
     if (theme !== undefined) updates.theme = theme;
     if (subTheme !== undefined) updates.subTheme = subTheme;
-    if (dateStart !== undefined) updates.dateStart = new Date(dateStart);
-    if (dateEnd !== undefined) updates.dateEnd = new Date(dateEnd);
+    if (datetime !== undefined) updates.datetime = new Date(datetime);
+    if (durationMinutes !== undefined) updates.durationMinutes = durationMinutes;
     if (location !== undefined) updates.location = location;
     if (locationUrl !== undefined) updates.locationUrl = locationUrl;
     if (fee !== undefined) updates.fee = fee;
     if (capacity !== undefined) updates.capacity = capacity;
-    if (tags !== undefined) updates.tags = tags;
+    if (minParticipants !== undefined) updates.minParticipants = minParticipants;
+    if (deadline !== undefined) updates.deadline = deadline;
+    if (notes !== undefined) updates.notes = notes;
     const [updated] = await db.update(eventsTable).set(updates).where(eq(eventsTable.id, id)).returning();
-    const response = await buildEventResponse(updated, user.id);
-    res.json(response);
+    res.json(await buildEventResponse(updated, user.id));
   } catch (err) {
     req.log.error({ err }, "updateEvent error");
     res.status(500).json({ error: "Internal server error" });
@@ -147,9 +146,8 @@ router.delete("/:id", requireAuth, async (req, res) => {
     const id = Number(req.params.id);
     const clerkUserId = (req as any).clerkUserId;
     const auth = getAuth(req);
-    const email = auth?.sessionClaims?.email as string || "";
-    const name = auth?.sessionClaims?.name as string || (auth?.sessionClaims?.firstName as string) || "";
-    const user = await getOrCreateUser(clerkUserId, email, name);
+    const email = (auth?.sessionClaims?.email as string) || "";
+    const user = await getOrCreateUser(clerkUserId, email);
     const events = await db.select().from(eventsTable).where(eq(eventsTable.id, id)).limit(1);
     if (!events.length) { res.status(404).json({ error: "Not found" }); return; }
     if (events[0].hostId !== user.id) { res.status(403).json({ error: "Forbidden" }); return; }

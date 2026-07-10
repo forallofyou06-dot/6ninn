@@ -1,5 +1,5 @@
 import { Router } from "express";
-import { db, usersTable, eventsTable, applicationsTable } from "@workspace/db";
+import { db, usersTable, eventsTable, participationsTable } from "@workspace/db";
 import { eq, and, sql } from "drizzle-orm";
 import { requireAuth } from "../middlewares/requireAuth";
 import { getOrCreateUser } from "../lib/getOrCreateUser";
@@ -10,11 +10,14 @@ const router = Router();
 router.get("/stats", requireAuth, async (req, res) => {
   try {
     const clerkUserId = (req as any).clerkUserId;
-    const users = await db.select().from(usersTable).where(eq(usersTable.clerkUserId, clerkUserId)).limit(1);
-    if (!users.length) { res.json({ participated: 0, hosted: 0, connections: 0 }); return; }
-    const user = users[0];
-    const [participatedRow] = await db.select({ count: sql<number>`count(*)` }).from(applicationsTable).where(and(eq(applicationsTable.userId, user.id), eq(applicationsTable.status, "active")));
-    const [hostedRow] = await db.select({ count: sql<number>`count(*)` }).from(eventsTable).where(eq(eventsTable.hostId, user.id));
+    const auth = getAuth(req);
+    const email = (auth?.sessionClaims?.email as string) || "";
+    const user = await getOrCreateUser(clerkUserId, email);
+    const [participatedRow] = await db.select({ count: sql<number>`count(*)` })
+      .from(participationsTable)
+      .where(and(eq(participationsTable.userId, user.id), eq(participationsTable.status, "申込")));
+    const [hostedRow] = await db.select({ count: sql<number>`count(*)` })
+      .from(eventsTable).where(eq(eventsTable.hostId, user.id));
     res.json({
       participated: Number(participatedRow?.count ?? 0),
       hosted: Number(hostedRow?.count ?? 0),
@@ -30,40 +33,20 @@ router.get("/applications", requireAuth, async (req, res) => {
   try {
     const clerkUserId = (req as any).clerkUserId;
     const auth = getAuth(req);
-    const email = auth?.sessionClaims?.email as string || "";
-    const name = auth?.sessionClaims?.name as string || (auth?.sessionClaims?.firstName as string) || "";
-    const user = await getOrCreateUser(clerkUserId, email, name);
-    const apps = await db.select().from(applicationsTable).where(eq(applicationsTable.userId, user.id)).orderBy(applicationsTable.createdAt);
-    const results = await Promise.all(apps.map(async (app) => {
-      const events = await db.select().from(eventsTable).where(eq(eventsTable.id, app.eventId)).limit(1);
-      const hosts = events.length ? await db.select().from(usersTable).where(eq(usersTable.id, events[0].hostId)).limit(1) : [];
-      const [appCount] = await db.select({ count: sql<number>`count(*)` }).from(applicationsTable).where(and(eq(applicationsTable.eventId, app.eventId), eq(applicationsTable.status, "active")));
-      const applicantsCount = Number(appCount?.count ?? 0);
-      const event = events[0];
-      const remainingSeats = event ? Math.max(0, event.capacity - applicantsCount) : 0;
+    const email = (auth?.sessionClaims?.email as string) || "";
+    const user = await getOrCreateUser(clerkUserId, email);
+    const parts = await db.select().from(participationsTable)
+      .where(eq(participationsTable.userId, user.id))
+      .orderBy(participationsTable.appliedAt);
+    const results = await Promise.all(parts.map(async (p) => {
+      const events = await db.select().from(eventsTable).where(eq(eventsTable.id, p.eventId)).limit(1);
       return {
-        id: app.id,
-        eventId: app.eventId,
-        status: app.status,
-        createdAt: app.createdAt.toISOString(),
-        event: event ? {
-          id: event.id,
-          theme: event.theme,
-          subTheme: event.subTheme ?? null,
-          dateStart: event.dateStart.toISOString(),
-          dateEnd: event.dateEnd.toISOString(),
-          location: event.location,
-          locationUrl: event.locationUrl ?? null,
-          fee: event.fee,
-          capacity: event.capacity,
-          tags: event.tags,
-          hostId: event.hostId,
-          hostName: hosts[0]?.displayName ?? "Unknown",
-          applicantsCount,
-          remainingSeats,
-          status: event.status,
-          isApplied: app.status === "active",
-          createdAt: event.createdAt.toISOString(),
+        id: p.id, eventId: p.eventId, status: p.status,
+        comment: p.comment, appliedAt: p.appliedAt.toISOString(),
+        event: events[0] ? {
+          id: events[0].id, theme: events[0].theme,
+          datetime: events[0].datetime.toISOString(),
+          location: events[0].location, status: events[0].status,
         } : null,
       };
     }));
@@ -78,32 +61,19 @@ router.get("/hosted-events", requireAuth, async (req, res) => {
   try {
     const clerkUserId = (req as any).clerkUserId;
     const auth = getAuth(req);
-    const email = auth?.sessionClaims?.email as string || "";
-    const name = auth?.sessionClaims?.name as string || (auth?.sessionClaims?.firstName as string) || "";
-    const user = await getOrCreateUser(clerkUserId, email, name);
-    const events = await db.select().from(eventsTable).where(eq(eventsTable.hostId, user.id)).orderBy(eventsTable.dateStart);
-    const results = await Promise.all(events.map(async (event) => {
-      const [appCount] = await db.select({ count: sql<number>`count(*)` }).from(applicationsTable).where(and(eq(applicationsTable.eventId, event.id), eq(applicationsTable.status, "active")));
-      const applicantsCount = Number(appCount?.count ?? 0);
-      const remainingSeats = Math.max(0, event.capacity - applicantsCount);
+    const email = (auth?.sessionClaims?.email as string) || "";
+    const user = await getOrCreateUser(clerkUserId, email);
+    const events = await db.select().from(eventsTable)
+      .where(eq(eventsTable.hostId, user.id)).orderBy(eventsTable.datetime);
+    const results = await Promise.all(events.map(async (e) => {
+      const [partCount] = await db.select({ count: sql<number>`count(*)` })
+        .from(participationsTable)
+        .where(and(eq(participationsTable.eventId, e.id), eq(participationsTable.status, "申込")));
       return {
-        id: event.id,
-        theme: event.theme,
-        subTheme: event.subTheme ?? null,
-        dateStart: event.dateStart.toISOString(),
-        dateEnd: event.dateEnd.toISOString(),
-        location: event.location,
-        locationUrl: event.locationUrl ?? null,
-        fee: event.fee,
-        capacity: event.capacity,
-        tags: event.tags,
-        hostId: event.hostId,
-        hostName: user.displayName,
-        applicantsCount,
-        remainingSeats,
-        status: event.status,
-        isApplied: false,
-        createdAt: event.createdAt.toISOString(),
+        id: e.id, theme: e.theme,
+        datetime: e.datetime.toISOString(),
+        location: e.location, capacity: e.capacity,
+        participantsCount: Number(partCount?.count ?? 0), status: e.status,
       };
     }));
     res.json(results);
