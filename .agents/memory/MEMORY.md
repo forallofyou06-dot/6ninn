@@ -1,1 +1,3 @@
 - [Phase 0 schema decisions](phase0-schema.md) — 9テーブル構成、domainチェックなし、name nullable=初回登録未完
+- [Orval ZOD index.ts conflict](orval-zod-index.md) — orval overwrites lib/api-zod/src/index.ts in workspace mode; must fix after codegen.
+- [QueryKey required in RQ v5 hooks](react-query-v5-querykey.md) — orval+RQv5 UseQueryOptions requires queryKey; pass getXxxQueryKey(id) in query options.

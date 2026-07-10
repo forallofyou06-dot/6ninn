@@ -1,199 +1,163 @@
-import { useGetEvent, useUpdateEvent, getGetEventQueryKey, getListEventsQueryKey, getListMyHostedEventsQueryKey } from "@workspace/api-client-react";
-import { MobileLayout } from "@/components/layout/MobileLayout";
-import { useQueryClient } from "@tanstack/react-query";
-import { useParams, useLocation, Link } from "wouter";
-import { useForm } from "react-hook-form";
-import { zodResolver } from "@hookform/resolvers/zod";
-import { z } from "zod";
-import { ChevronLeft, Plus, X } from "lucide-react";
 import { useState, useEffect } from "react";
+import { useGetEvent, useUpdateEvent, getGetEventQueryKey } from "@workspace/api-client-react";
+import { MobileLayout } from "@/components/layout/MobileLayout";
+import { useParams, useLocation, Link } from "wouter";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Textarea } from "@/components/ui/textarea";
 import { useToast } from "@/hooks/use-toast";
+import { ChevronLeft } from "lucide-react";
 import { format } from "date-fns";
 
-const MAX_DURATION_MS = 2 * 60 * 60 * 1000;
+const PRESET_TAGS = ["食", "映画", "読書", "音楽", "旅", "スポーツ", "テクノロジー", "アート", "韓国", "猫", "歴史", "ゲーム", "料理"];
 
-const schema = z.object({
-  theme: z.string().min(1, "テーマを入力してください"),
-  subTheme: z.string().optional(),
-  dateStart: z.string().min(1, "開始日時を入力してください"),
-  dateEnd: z.string().min(1, "終了日時を入力してください"),
-  location: z.string().min(1, "場所を入力してください"),
-  locationUrl: z.string().optional(),
-  fee: z.coerce.number().min(0).max(5000, "会費は5000円以内"),
-  capacity: z.coerce.number().min(1).max(6, "定員は6人以内"),
-}).refine((d) => {
-  const diff = new Date(d.dateEnd).getTime() - new Date(d.dateStart).getTime();
-  return diff > 0 && diff <= MAX_DURATION_MS;
-}, { message: "終了時刻は開始から2時間以内にしてください", path: ["dateEnd"] });
-
-type FormData = z.infer<typeof schema>;
-
-function toLocalDatetimeValue(iso: string) {
-  return format(new Date(iso), "yyyy-MM-dd'T'HH:mm");
-}
-
-export default function EventEdit() {
+export default function EditEvent() {
   const params = useParams();
   const id = Number(params.id);
-  const [, setLocation] = useLocation();
-  const queryClient = useQueryClient();
+  const [, navigate] = useLocation();
   const { toast } = useToast();
-  const [tags, setTags] = useState<string[]>([]);
-  const [tagInput, setTagInput] = useState("");
+  const { data: event } = useGetEvent(id, { query: { enabled: !!id, queryKey: getGetEventQueryKey(id) } });
 
-  const { data: event, isLoading } = useGetEvent(id, { query: { enabled: !!id, queryKey: getGetEventQueryKey(id) } });
-
-  const { register, handleSubmit, reset, formState: { errors } } = useForm<FormData>({
-    resolver: zodResolver(schema),
-  });
+  const [theme, setTheme] = useState("");
+  const [subTheme, setSubTheme] = useState("");
+  const [datetime, setDatetime] = useState("");
+  const [durationMinutes, setDurationMinutes] = useState(60);
+  const [location, setLocation] = useState("");
+  const [locationUrl, setLocationUrl] = useState("");
+  const [fee, setFee] = useState(0);
+  const [capacity, setCapacity] = useState(6);
+  const [minParticipants, setMinParticipants] = useState(2);
+  const [deadline, setDeadline] = useState("");
+  const [notes, setNotes] = useState("");
+  const [selectedTags, setSelectedTags] = useState<string[]>([]);
 
   useEffect(() => {
     if (event) {
-      reset({
-        theme: event.theme,
-        subTheme: event.subTheme ?? "",
-        dateStart: toLocalDatetimeValue(event.dateStart),
-        dateEnd: toLocalDatetimeValue(event.dateEnd),
-        location: event.location,
-        locationUrl: event.locationUrl ?? "",
-        fee: event.fee,
-        capacity: event.capacity,
-      });
-      setTags(event.tags);
+      setTheme(event.theme);
+      setSubTheme(event.subTheme ?? "");
+      const d = new Date(event.datetime);
+      setDatetime(format(d, "yyyy-MM-dd'T'HH:mm"));
+      setDurationMinutes(event.durationMinutes);
+      setLocation(event.location);
+      setLocationUrl(event.locationUrl ?? "");
+      setFee(event.fee);
+      setCapacity(event.capacity);
+      setMinParticipants(event.minParticipants);
+      setDeadline(event.deadline);
+      setNotes(event.notes ?? "");
+      setSelectedTags(event.tags);
     }
-  }, [event, reset]);
+  }, [event]);
 
-  const updateEvent = useUpdateEvent({
+  const updateMutation = useUpdateEvent({
     mutation: {
-      onSuccess: () => {
-        queryClient.invalidateQueries({ queryKey: getGetEventQueryKey(id) });
-        queryClient.invalidateQueries({ queryKey: getListEventsQueryKey() });
-        queryClient.invalidateQueries({ queryKey: getListMyHostedEventsQueryKey() });
-        toast({ title: "更新しました" });
-        setLocation(`/events/${id}`);
-      },
-      onError: () => toast({ title: "エラーが発生しました", variant: "destructive" }),
+      onSuccess: () => { toast({ title: "会を更新しました" }); navigate(`/events/${id}`); },
+      onError: (e: any) => toast({ title: e?.message || "エラーが発生しました", variant: "destructive" }),
     },
   });
 
-  const addTag = () => {
-    const t = tagInput.trim().replace(/^#/, "");
-    if (t && !tags.includes(t)) setTags([...tags, t]);
-    setTagInput("");
+  const toggleTag = (tag: string) => {
+    setSelectedTags((prev) => prev.includes(tag) ? prev.filter((t) => t !== tag) : [...prev, tag]);
   };
 
-  const removeTag = (t: string) => setTags(tags.filter((x) => x !== t));
-
-  const onSubmit = (data: FormData) => {
-    updateEvent.mutate({
+  const handleSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (fee > 5000) { toast({ title: "会費は5,000円以内にしてください", variant: "destructive" }); return; }
+    if (capacity < 3 || capacity > 6) { toast({ title: "定員は3〜6人にしてください", variant: "destructive" }); return; }
+    if (durationMinutes > 120) { toast({ title: "開催時間は2時間以内にしてください", variant: "destructive" }); return; }
+    updateMutation.mutate({
       id,
-      data: {
-        theme: data.theme,
-        subTheme: data.subTheme || undefined,
-        dateStart: new Date(data.dateStart).toISOString(),
-        dateEnd: new Date(data.dateEnd).toISOString(),
-        location: data.location,
-        locationUrl: data.locationUrl || undefined,
-        fee: data.fee,
-        capacity: data.capacity,
-        tags,
-      },
+      data: { theme, subTheme: subTheme || undefined, datetime, durationMinutes, location, locationUrl: locationUrl || undefined, fee, capacity, minParticipants, deadline, notes: notes || undefined, tags: selectedTags } as any,
     });
   };
 
-  if (isLoading) return <MobileLayout><div className="p-4">読み込み中...</div></MobileLayout>;
-  if (!event) return <MobileLayout><div className="p-4">見つかりませんでした</div></MobileLayout>;
+  if (!event) return <MobileLayout><div className="p-4 text-muted-foreground text-sm">読み込み中...</div></MobileLayout>;
+  if (!event.isHost) return <MobileLayout><div className="p-8 text-center text-muted-foreground">編集権限がありません</div></MobileLayout>;
 
   return (
     <MobileLayout>
-      <div className="p-4 pb-8">
-        <Link href={`/events/${id}`} className="inline-flex items-center text-sm text-muted-foreground mb-6">
+      <div className="p-4 pb-24">
+        <Link href={`/events/${id}`} className="inline-flex items-center text-sm text-muted-foreground mb-4">
           <ChevronLeft size={16} /> 詳細に戻る
         </Link>
-        <h1 className="text-xl font-serif font-bold mb-6">会を編集する</h1>
+        <h1 className="text-xl font-serif font-bold mb-6">会を編集</h1>
 
-        <form onSubmit={handleSubmit(onSubmit)} className="space-y-5">
+        <form onSubmit={handleSubmit} className="space-y-5">
           <div className="space-y-1.5">
-            <Label htmlFor="theme">テーマ</Label>
-            <Input id="theme" {...register("theme")} data-testid="input-theme" />
-            {errors.theme && <p className="text-xs text-destructive">{errors.theme.message}</p>}
+            <Label>テーマ <span className="text-destructive">*</span></Label>
+            <Input value={theme} onChange={(e) => setTheme(e.target.value)} maxLength={50} required />
           </div>
-
           <div className="space-y-1.5">
-            <Label htmlFor="subTheme">× キーワード（任意）</Label>
-            <Input id="subTheme" {...register("subTheme")} data-testid="input-subtheme" />
+            <Label>サブタイトル（任意）</Label>
+            <Input value={subTheme} onChange={(e) => setSubTheme(e.target.value)} maxLength={100} />
           </div>
-
-          <div className="grid grid-cols-2 gap-3">
-            <div className="space-y-1.5">
-              <Label htmlFor="dateStart">開始日時</Label>
-              <Input id="dateStart" type="datetime-local" {...register("dateStart")} data-testid="input-date-start" />
-              {errors.dateStart && <p className="text-xs text-destructive">{errors.dateStart.message}</p>}
-            </div>
-            <div className="space-y-1.5">
-              <Label htmlFor="dateEnd">終了日時</Label>
-              <Input id="dateEnd" type="datetime-local" {...register("dateEnd")} data-testid="input-date-end" />
-              {errors.dateEnd && <p className="text-xs text-destructive">{errors.dateEnd.message}</p>}
+          <div>
+            <Label className="mb-2 block">タグ</Label>
+            <div className="flex flex-wrap gap-1.5">
+              {PRESET_TAGS.map((tag) => (
+                <button key={tag} type="button" onClick={() => toggleTag(tag)}
+                  className={`text-sm px-3 py-1 rounded-full border ${selectedTags.includes(tag) ? "bg-primary text-primary-foreground border-primary" : "bg-background border-border"}`}>
+                  #{tag}
+                </button>
+              ))}
             </div>
           </div>
-
           <div className="space-y-1.5">
-            <Label htmlFor="location">場所</Label>
-            <Input id="location" {...register("location")} data-testid="input-location" />
-            {errors.location && <p className="text-xs text-destructive">{errors.location.message}</p>}
+            <Label>開催日時</Label>
+            <Input type="datetime-local" value={datetime} onChange={(e) => setDatetime(e.target.value)} required />
           </div>
-
           <div className="space-y-1.5">
-            <Label htmlFor="locationUrl">場所リンク（任意）</Label>
-            <Input id="locationUrl" type="url" {...register("locationUrl")} data-testid="input-location-url" />
-          </div>
-
-          <div className="grid grid-cols-2 gap-3">
-            <div className="space-y-1.5">
-              <Label htmlFor="fee">会費 (¥)</Label>
-              <Input id="fee" type="number" min={0} max={5000} {...register("fee")} data-testid="input-fee" />
-              {errors.fee && <p className="text-xs text-destructive">{errors.fee.message}</p>}
-            </div>
-            <div className="space-y-1.5">
-              <Label htmlFor="capacity">定員</Label>
-              <Input id="capacity" type="number" min={1} max={6} {...register("capacity")} data-testid="input-capacity" />
-              {errors.capacity && <p className="text-xs text-destructive">{errors.capacity.message}</p>}
-            </div>
-          </div>
-
-          <div className="space-y-2">
-            <Label>タグ</Label>
+            <Label>開催時間（分）</Label>
             <div className="flex gap-2">
-              <Input
-                placeholder="食, 映画, 読書..."
-                value={tagInput}
-                onChange={(e) => setTagInput(e.target.value)}
-                onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); addTag(); } }}
-                data-testid="input-tag"
-              />
-              <Button type="button" variant="outline" size="icon" onClick={addTag}>
-                <Plus size={16} />
-              </Button>
+              {[30, 60, 90, 120].map((m) => (
+                <button key={m} type="button" onClick={() => setDurationMinutes(m)}
+                  className={`text-sm px-3 py-1.5 rounded-md border ${durationMinutes === m ? "bg-primary text-primary-foreground border-primary" : "border-border"}`}>{m}分</button>
+              ))}
             </div>
-            {tags.length > 0 && (
-              <div className="flex flex-wrap gap-1.5 pt-1">
-                {tags.map((t) => (
-                  <span key={t} className="inline-flex items-center gap-1 text-xs bg-secondary text-secondary-foreground px-2 py-1 rounded-full">
-                    #{t}
-                    <button type="button" onClick={() => removeTag(t)}>
-                      <X size={12} />
-                    </button>
-                  </span>
+          </div>
+          <div className="space-y-1.5">
+            <Label>場所</Label>
+            <Input value={location} onChange={(e) => setLocation(e.target.value)} required />
+          </div>
+          <div className="space-y-1.5">
+            <Label>場所のURL（任意）</Label>
+            <Input value={locationUrl} onChange={(e) => setLocationUrl(e.target.value)} />
+          </div>
+          <div className="grid grid-cols-3 gap-3">
+            <div className="space-y-1.5">
+              <Label>参加費（円）</Label>
+              <Input type="number" min={0} max={5000} step={100} value={fee} onChange={(e) => setFee(Number(e.target.value))} />
+            </div>
+            <div className="space-y-1.5">
+              <Label>定員（人）</Label>
+              <div className="flex gap-1">
+                {[3, 4, 5, 6].map((n) => (
+                  <button key={n} type="button" onClick={() => setCapacity(n)}
+                    className={`flex-1 text-sm py-2 rounded-md border ${capacity === n ? "bg-primary text-primary-foreground border-primary" : "border-border"}`}>{n}</button>
                 ))}
               </div>
-            )}
+            </div>
+            <div className="space-y-1.5">
+              <Label>最低実行人数</Label>
+              <div className="flex gap-1">
+                {[2, 3, 4].map((n) => (
+                  <button key={n} type="button" onClick={() => setMinParticipants(n)}
+                    className={`flex-1 text-sm py-2 rounded-md border ${minParticipants === n ? "bg-primary text-primary-foreground border-primary" : "border-border"}`}>{n}</button>
+                ))}
+              </div>
+            </div>
           </div>
-
-          <Button type="submit" className="w-full" disabled={updateEvent.isPending} data-testid="button-submit-event">
-            {updateEvent.isPending ? "更新中..." : "更新する"}
+          <div className="space-y-1.5">
+            <Label>締切日</Label>
+            <Input type="date" value={deadline} onChange={(e) => setDeadline(e.target.value)} required />
+          </div>
+          <div className="space-y-1.5">
+            <Label>その他注意事項（任意）</Label>
+            <Textarea value={notes} onChange={(e) => setNotes(e.target.value)} rows={3} />
+          </div>
+          <Button type="submit" disabled={updateMutation.isPending} className="w-full h-12">
+            {updateMutation.isPending ? "保存中..." : "変更を保存する"}
           </Button>
         </form>
       </div>

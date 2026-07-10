@@ -16,9 +16,12 @@ import EventsList from "@/pages/events/list";
 import EventDetail from "@/pages/events/detail";
 import EventNew from "@/pages/events/new";
 import EventEdit from "@/pages/events/edit";
-import EventReport from "@/pages/events/report";
 import MyPage from "@/pages/my/index";
 import MyApplications from "@/pages/my/applications";
+import Notifications from "@/pages/notifications";
+import Rules from "@/pages/rules";
+import Feedback from "@/pages/feedback";
+import OfficeDashboard from "@/pages/office/index";
 
 const clerkPubKey = publishableKeyFromHost(
   window.location.hostname,
@@ -246,11 +249,15 @@ function ClerkProviderWithRoutes() {
             <ProtectedRoute path="/events" component={EventsList} />
             <ProtectedRoute path="/events/new" component={EventNew} />
             <ProtectedRoute path="/events/:id/edit" component={EventEdit} />
-            <ProtectedRoute path="/events/:id/report" component={EventReport} />
             <ProtectedRoute path="/events/:id" component={EventDetail} />
 
             <ProtectedRoute path="/my" component={MyPage} />
             <ProtectedRoute path="/my/applications" component={MyApplications} />
+            <ProtectedRoute path="/my/hosted" component={MyApplications} />
+            <ProtectedRoute path="/notifications" component={Notifications} />
+            <ProtectedRoute path="/rules" component={Rules} />
+            <ProtectedRoute path="/feedback" component={Feedback} />
+            <ProtectedRoute path="/office" component={OfficeDashboard} />
 
             <Route component={NotFound} />
           </Switch>

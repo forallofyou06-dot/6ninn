@@ -1,88 +1,139 @@
-import { useListMyApplications, getListMyApplicationsQueryKey } from "@workspace/api-client-react";
+import { useListMyApplications, useListMyHostedEvents, useCancelParticipation, getListMyApplicationsQueryKey } from "@workspace/api-client-react";
 import { MobileLayout } from "@/components/layout/MobileLayout";
+import { useQueryClient } from "@tanstack/react-query";
 import { Link } from "wouter";
-import { ChevronLeft, ChevronRight, Calendar } from "lucide-react";
-import { format, isFuture } from "date-fns";
+import { format } from "date-fns";
+import { ja } from "date-fns/locale";
+import { ChevronLeft, ChevronRight, Calendar, MapPin } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { useToast } from "@/hooks/use-toast";
+import { useState } from "react";
 
-function StatusBadge({ status, dateStart }: { status: string; dateStart: string }) {
-  const upcoming = isFuture(new Date(dateStart));
-  if (status === "cancelled") return <span className="text-xs bg-muted text-muted-foreground px-2 py-0.5 rounded-full">キャンセル済み</span>;
-  if (upcoming) return <span className="text-xs bg-primary/10 text-primary px-2 py-0.5 rounded-full font-medium">参加予定</span>;
-  return <span className="text-xs bg-secondary text-secondary-foreground px-2 py-0.5 rounded-full">参加済み</span>;
+function statusBadge(status: string) {
+  const colors: Record<string, string> = {
+    "募集中": "bg-green-100 text-green-700",
+    "実施確定": "bg-blue-100 text-blue-700",
+    "開催済": "bg-gray-100 text-gray-600",
+    "未実施": "bg-red-100 text-red-600",
+  };
+  return <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${colors[status] || "bg-muted text-muted-foreground"}`}>{status}</span>;
 }
 
 export default function MyApplications() {
-  const { data: applications, isLoading } = useListMyApplications({ query: { queryKey: getListMyApplicationsQueryKey() } });
+  const [tab, setTab] = useState<"applied" | "hosted">("applied");
+  const { data: applications } = useListMyApplications();
+  const { data: hostedEvents } = useListMyHostedEvents();
+  const queryClient = useQueryClient();
+  const { toast } = useToast();
 
-  const upcoming = applications?.filter((a) => a.event && isFuture(new Date(a.event.dateStart)) && a.status === "active") ?? [];
-  const past = applications?.filter((a) => !a.event || !isFuture(new Date(a.event.dateStart)) || a.status === "cancelled") ?? [];
+  const cancelMutation = useCancelParticipation({
+    mutation: {
+      onSuccess: () => {
+        queryClient.invalidateQueries({ queryKey: getListMyApplicationsQueryKey() });
+        toast({ title: "キャンセルしました" });
+      },
+      onError: () => toast({ title: "キャンセルに失敗しました", variant: "destructive" }),
+    },
+  });
 
   return (
     <MobileLayout>
-      <div className="p-4">
-        <Link href="/my" className="inline-flex items-center text-sm text-muted-foreground mb-6">
+      <div className="p-4 pb-24">
+        <Link href="/my" className="inline-flex items-center text-sm text-muted-foreground mb-4">
           <ChevronLeft size={16} /> マイページ
         </Link>
-        <h1 className="text-xl font-serif font-bold mb-6">参加履歴</h1>
 
-        {isLoading ? (
-          <div className="space-y-3">
-            {[1, 2, 3].map(i => <div key={i} className="animate-pulse bg-muted h-20 rounded-xl" />)}
-          </div>
+        <div className="flex gap-1 mb-4 bg-muted rounded-lg p-1">
+          <button onClick={() => setTab("applied")} className={`flex-1 text-sm py-1.5 rounded-md font-medium transition-colors ${tab === "applied" ? "bg-background shadow-sm" : "text-muted-foreground"}`}>
+            参加履歴
+          </button>
+          <button onClick={() => setTab("hosted")} className={`flex-1 text-sm py-1.5 rounded-md font-medium transition-colors ${tab === "hosted" ? "bg-background shadow-sm" : "text-muted-foreground"}`}>
+            ひらいた会
+          </button>
+        </div>
+
+        {tab === "applied" ? (
+          !applications?.length ? (
+            <div className="text-center py-12 text-muted-foreground">
+              <Calendar size={32} className="mx-auto mb-2 opacity-30" />
+              <p className="text-sm">まだ参加申込がありません</p>
+              <Link href="/events"><span className="text-xs text-primary mt-2 inline-block">会を探してみましょう →</span></Link>
+            </div>
+          ) : (
+            <div className="space-y-3">
+              {applications.map((app: any) => {
+                const event = app.event;
+                if (!event) return null;
+                const isPastDeadline = new Date() > new Date(event.deadline);
+                const isActive = event.status === "募集中" || event.status === "実施確定";
+                return (
+                  <div key={app.id} className="bg-card border border-border rounded-xl overflow-hidden">
+                    <Link href={`/events/${app.eventId}`}>
+                      <div className="p-4 hover:bg-muted/20 cursor-pointer">
+                        <div className="flex items-start justify-between gap-2 mb-2">
+                          <h3 className="font-semibold text-sm flex-1">{event.theme}</h3>
+                          {statusBadge(event.status)}
+                        </div>
+                        <div className="space-y-1 text-xs text-muted-foreground">
+                          <div className="flex items-center gap-1.5">
+                            <Calendar size={11} />
+                            <span>{format(new Date(event.datetime), "M月d日(E) HH:mm", { locale: ja })}</span>
+                          </div>
+                          <div className="flex items-center gap-1.5">
+                            <MapPin size={11} />
+                            <span>{event.location}</span>
+                          </div>
+                        </div>
+                        {app.comment && <p className="text-xs text-muted-foreground mt-2 italic">「{app.comment}」</p>}
+                        <p className="text-xs text-muted-foreground mt-2">申込日: {format(new Date(app.appliedAt), "yyyy/M/d", { locale: ja })}</p>
+                      </div>
+                    </Link>
+                    {isActive && !isPastDeadline && (
+                      <div className="border-t border-border px-4 py-2 flex justify-end">
+                        <Button variant="ghost" size="sm" onClick={() => cancelMutation.mutate({ id: app.eventId })} disabled={cancelMutation.isPending} className="text-destructive hover:text-destructive text-xs h-7">
+                          キャンセル
+                        </Button>
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          )
         ) : (
-          <div className="space-y-8">
-            {upcoming.length > 0 && (
-              <section>
-                <h2 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-3">今後の予定</h2>
-                <div className="space-y-3">
-                  {upcoming.map((app) => (
-                    <ApplicationCard key={app.id} app={app} />
-                  ))}
-                </div>
-              </section>
-            )}
-            {past.length > 0 && (
-              <section>
-                <h2 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-3">これまで</h2>
-                <div className="space-y-3">
-                  {past.map((app) => (
-                    <ApplicationCard key={app.id} app={app} showReport />
-                  ))}
-                </div>
-              </section>
-            )}
-            {applications?.length === 0 && (
-              <div className="text-center py-12 text-muted-foreground">
-                <p className="text-sm">まだ参加した会がありません</p>
-              </div>
-            )}
-          </div>
+          !hostedEvents?.length ? (
+            <div className="text-center py-12 text-muted-foreground">
+              <ChevronRight size={32} className="mx-auto mb-2 opacity-30" />
+              <p className="text-sm">まだ会を開いたことがありません</p>
+              <Link href="/events/new"><span className="text-xs text-primary mt-2 inline-block">はじめての会をひらく →</span></Link>
+            </div>
+          ) : (
+            <div className="space-y-3">
+              {hostedEvents.map((event: any) => (
+                <Link key={event.id} href={`/events/${event.id}`}>
+                  <div className="bg-card border border-border rounded-xl p-4 hover:shadow-sm cursor-pointer">
+                    <div className="flex items-start justify-between gap-2 mb-2">
+                      <h3 className="font-semibold text-sm flex-1">{event.theme}</h3>
+                      {statusBadge(event.status)}
+                    </div>
+                    <div className="space-y-1 text-xs text-muted-foreground">
+                      <div className="flex items-center gap-1.5">
+                        <Calendar size={11} />
+                        <span>{format(new Date(event.datetime), "M月d日(E) HH:mm", { locale: ja })}</span>
+                      </div>
+                      <div className="flex items-center gap-1.5">
+                        <MapPin size={11} />
+                        <span>{event.location}</span>
+                      </div>
+                      <div>参加者: {event.participantsCount}/{event.capacity}人</div>
+                    </div>
+                  </div>
+                </Link>
+              ))}
+            </div>
+          )
         )}
       </div>
     </MobileLayout>
-  );
-}
-
-function ApplicationCard({ app, showReport }: { app: any; showReport?: boolean }) {
-  const event = app.event;
-  if (!event) return null;
-  return (
-    <div className="bg-card border border-border rounded-xl p-4" data-testid={`application-card-${app.id}`}>
-      <div className="flex justify-between items-start mb-2">
-        <h3 className="font-semibold text-sm flex-1 pr-2">{event.theme}</h3>
-        <StatusBadge status={app.status} dateStart={event.dateStart} />
-      </div>
-      <div className="flex items-center gap-2 text-xs text-muted-foreground mb-3">
-        <Calendar size={12} />
-        <span>{format(new Date(event.dateStart), 'MM/dd HH:mm')}</span>
-        <span>·</span>
-        <span>{event.location}</span>
-      </div>
-      {showReport && app.status === "active" && (
-        <Link href={`/events/${event.id}/report`} className="text-xs text-primary inline-flex items-center gap-1 hover:underline" data-testid={`link-report-${event.id}`}>
-          レポートを見る <ChevronRight size={12} />
-        </Link>
-      )}
-    </div>
   );
 }
