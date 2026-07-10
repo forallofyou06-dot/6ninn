@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { useGetMe, useUpdateMe, useGetMyStats } from "@workspace/api-client-react";
+import { useGetMe, useUpdateMe, useGetMyStats, getGetMeQueryKey } from "@workspace/api-client-react";
 import { MobileLayout } from "@/components/layout/MobileLayout";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -26,7 +26,7 @@ export default function MyPage() {
   const updateMutation = useUpdateMe({
     mutation: {
       onSuccess: () => {
-        queryClient.invalidateQueries({ queryKey: ["/api/my/me"] });
+        queryClient.invalidateQueries({ queryKey: getGetMeQueryKey() });
         setEditing(false);
         toast({ title: "プロフィールを更新しました" });
       },

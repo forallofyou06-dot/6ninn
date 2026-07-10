@@ -1,23 +1,23 @@
 import { db, tagsTable, eventTagsTable } from "@workspace/db";
-import { eq, inArray, sql } from "drizzle-orm";
+import { eq, sql } from "drizzle-orm";
 
-export async function upsertEventTags(eventId: number, tagNames: string[]): Promise<void> {
-  // Delete existing
-  await db.delete(eventTagsTable).where(eq(eventTagsTable.eventId, eventId));
+type DbOrTx = typeof db | Parameters<Parameters<typeof db.transaction>[0]>[0];
+
+export async function upsertEventTags(eventId: number, tagNames: string[], ctx: DbOrTx = db): Promise<void> {
+  await ctx.delete(eventTagsTable).where(eq(eventTagsTable.eventId, eventId));
   if (!tagNames.length) return;
-  // Upsert tags
   const tagIds: number[] = [];
   for (const name of tagNames) {
-    const existing = await db.select().from(tagsTable).where(eq(tagsTable.name, name)).limit(1);
+    const existing = await ctx.select().from(tagsTable).where(eq(tagsTable.name, name)).limit(1);
     if (existing.length) {
       tagIds.push(existing[0].id);
     } else {
-      const [t] = await db.insert(tagsTable).values({ name }).returning();
+      const [t] = await ctx.insert(tagsTable).values({ name }).returning();
       tagIds.push(t.id);
     }
   }
   if (tagIds.length) {
-    await db.insert(eventTagsTable).values(tagIds.map((tagId) => ({ eventId, tagId })));
+    await ctx.insert(eventTagsTable).values(tagIds.map((tagId) => ({ eventId, tagId })));
   }
 }
 

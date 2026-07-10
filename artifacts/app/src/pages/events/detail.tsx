@@ -39,14 +39,19 @@ export default function EventDetail() {
     queryClient.invalidateQueries({ queryKey: getListEventsQueryKey() });
   };
 
+  const apiError = (e: unknown) => {
+    const msg = (e as any)?.response?.data?.error || (e as any)?.message || "エラーが発生しました";
+    return msg as string;
+  };
+
   const applyMutation = useApplyToEvent({
-    mutation: { onSuccess: () => { invalidate(); toast({ title: "申し込みました！" }); setShowCommentInput(false); setComment(""); }, onError: (e: any) => toast({ title: e?.message || "エラーが発生しました", variant: "destructive" }) }
+    mutation: { onSuccess: () => { invalidate(); toast({ title: "申し込みました！" }); setShowCommentInput(false); setComment(""); }, onError: (e) => toast({ title: apiError(e), variant: "destructive" }) }
   });
   const cancelMutation = useCancelParticipation({
-    mutation: { onSuccess: () => { invalidate(); toast({ title: "キャンセルしました" }); }, onError: (e: any) => toast({ title: e?.message || "エラーが発生しました", variant: "destructive" }) }
+    mutation: { onSuccess: () => { invalidate(); toast({ title: "キャンセルしました" }); }, onError: (e) => toast({ title: apiError(e), variant: "destructive" }) }
   });
   const createReportMutation = useCreateReport({
-    mutation: { onSuccess: () => { queryClient.invalidateQueries({ queryKey: getListEventReportsQueryKey(id) }); toast({ title: "投稿しました" }); setReportContent(""); setPhotoUrl(""); }, onError: () => toast({ title: "エラーが発生しました", variant: "destructive" }) }
+    mutation: { onSuccess: () => { queryClient.invalidateQueries({ queryKey: getListEventReportsQueryKey(id) }); toast({ title: "投稿しました" }); setReportContent(""); setPhotoUrl(""); }, onError: (e) => toast({ title: apiError(e), variant: "destructive" }) }
   });
   const likeMutation = useLikeReport({
     mutation: { onSuccess: () => queryClient.invalidateQueries({ queryKey: getListEventReportsQueryKey(id) }) }

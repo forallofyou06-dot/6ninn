@@ -1,19 +1,20 @@
 import { db, eventsTable } from "@workspace/db";
 import { eq } from "drizzle-orm";
+import { deadlineEndJST } from "./eventStatus";
 
 export async function computeAndUpdateStatus(
   event: typeof eventsTable.$inferSelect,
   participantsCount: number
 ): Promise<string> {
   const now = new Date();
-  const deadline = new Date(event.deadline);
+  const deadlineEnd = deadlineEndJST(event.deadline);
   const datetime = new Date(event.datetime);
   const endDatetime = new Date(datetime.getTime() + event.durationMinutes * 60 * 1000);
 
   let newStatus = event.status;
 
   if (event.status === "募集中") {
-    if (now > deadline) {
+    if (now > deadlineEnd) {
       newStatus = participantsCount >= event.minParticipants ? "実施確定" : "未実施";
     }
   }
