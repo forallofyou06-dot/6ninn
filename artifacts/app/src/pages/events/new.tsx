@@ -22,7 +22,6 @@ export default function NewEvent() {
   const [locationUrl, setLocationUrl] = useState("");
   const [fee, setFee] = useState(0);
   const [capacity, setCapacity] = useState(6);
-  const [minParticipants, setMinParticipants] = useState(2);
   const [deadline, setDeadline] = useState("");
   const [notes, setNotes] = useState("");
   const [selectedTags, setSelectedTags] = useState<string[]>([]);
@@ -47,6 +46,7 @@ export default function NewEvent() {
     if (!datetime) { toast({ title: "日時を入力してください", variant: "destructive" }); return; }
     if (!location.trim()) { toast({ title: "場所を入力してください", variant: "destructive" }); return; }
     if (!deadline) { toast({ title: "締切日を入力してください", variant: "destructive" }); return; }
+    if (deadline > datetime.slice(0, 10)) { toast({ title: "申込締切日は開催日以前にしてください", variant: "destructive" }); return; }
     if (fee > 5000) { toast({ title: "会費は5,000円以内にしてください", variant: "destructive" }); return; }
     if (capacity < 3 || capacity > 6) { toast({ title: "定員は3〜6人にしてください", variant: "destructive" }); return; }
     if (durationMinutes > 120) { toast({ title: "開催時間は2時間以内にしてください", variant: "destructive" }); return; }
@@ -56,7 +56,7 @@ export default function NewEvent() {
         subTheme: subTheme.trim() || undefined,
         datetime, durationMinutes, location: location.trim(),
         locationUrl: locationUrl.trim() || undefined,
-        fee, capacity, minParticipants, deadline,
+        fee, capacity, minParticipants: 3, deadline,
         notes: notes.trim() || undefined,
         tags: selectedTags,
       } as any,
@@ -69,7 +69,7 @@ export default function NewEvent() {
         <Link href="/events" className="inline-flex items-center text-sm text-muted-foreground mb-4">
           <ChevronLeft size={16} /> 一覧に戻る
         </Link>
-        <h1 className="text-xl font-serif font-bold mb-1">会をひらく</h1>
+        <h1 className="text-xl font-serif font-bold mb-1">会を開催する</h1>
         <p className="text-sm text-muted-foreground mb-6">最大6人・2時間以内・5,000円以内</p>
 
         <form onSubmit={handleSubmit} className="space-y-5">
@@ -107,8 +107,9 @@ export default function NewEvent() {
               </div>
             </div>
             <div className="space-y-1.5">
-              <Label htmlFor="deadline">締切日 <span className="text-destructive">*</span></Label>
-              <Input id="deadline" type="date" value={deadline} onChange={(e) => setDeadline(e.target.value)} required />
+              <Label htmlFor="deadline">申込締切日 <span className="text-destructive">*</span></Label>
+              <Input id="deadline" type="date" value={deadline} onChange={(e) => setDeadline(e.target.value)} max={datetime.slice(0, 10) || undefined} required />
+              <p className="text-xs text-muted-foreground">この日の23:59まで申し込めます</p>
             </div>
           </div>
           <div className="space-y-1.5">
@@ -119,7 +120,7 @@ export default function NewEvent() {
             <Label htmlFor="locationUrl">場所のURL（任意）</Label>
             <Input id="locationUrl" placeholder="https://maps.google.com/..." value={locationUrl} onChange={(e) => setLocationUrl(e.target.value)} />
           </div>
-          <div className="grid grid-cols-3 gap-3">
+          <div className="grid grid-cols-2 gap-3">
             <div className="space-y-1.5">
               <Label htmlFor="fee">参加費（円）</Label>
               <Input id="fee" type="number" min={0} max={5000} step={100} value={fee} onChange={(e) => setFee(Number(e.target.value))} />
@@ -134,14 +135,12 @@ export default function NewEvent() {
                 ))}
               </div>
             </div>
-            <div className="space-y-1.5">
-              <Label>最低実行人数</Label>
-              <div className="flex gap-1">
-                {[2, 3, 4].map((n) => (
-                  <button key={n} type="button" onClick={() => setMinParticipants(n)}
-                    className={`flex-1 text-sm py-2 rounded-md border ${minParticipants === n ? "bg-primary text-primary-foreground border-primary" : "border-border"}`}>{n}</button>
-                ))}
+            <div className="col-span-2 flex items-center justify-between rounded-xl border border-primary/20 bg-primary/5 px-4 py-3">
+              <div>
+                <p className="text-sm font-medium">最低催行人数</p>
+                <p className="text-xs text-muted-foreground">主催者を含めて3人以上で開催確定</p>
               </div>
+              <span className="text-base font-bold text-primary">3人固定</span>
             </div>
           </div>
           <div className="space-y-1.5">
@@ -151,11 +150,11 @@ export default function NewEvent() {
 
           <div className="flex items-start gap-2 p-3 bg-primary/5 rounded-xl text-xs text-muted-foreground">
             <Info size={14} className="text-primary mt-0.5 shrink-0" />
-            <p>最低実行人数を下回った場合は締切日に自動でキャンセルとなります。参加者には通知が届きます。</p>
+            <p>3人集まると開催確定です。締切時点で3人未満の場合は自動で未実施となります。</p>
           </div>
 
           <Button type="submit" disabled={createMutation.isPending} className="w-full h-12 text-base">
-            {createMutation.isPending ? "作成中..." : "会をひらく"}
+            {createMutation.isPending ? "作成中..." : "会を開催する"}
           </Button>
         </form>
       </div>

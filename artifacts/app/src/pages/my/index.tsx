@@ -9,6 +9,7 @@ import { useToast } from "@/hooks/use-toast";
 import { Link } from "wouter";
 import { Users, Calendar, Award, ChevronRight, Edit3, LogOut } from "lucide-react";
 import { useAuth } from "@/lib/auth";
+import { joinFullName, splitFullName } from "@/lib/name";
 
 const PRESET_TAGS = ["食", "映画", "読書", "音楽", "旅", "スポーツ", "テクノロジー", "アート", "韓国", "猫", "歴史", "ゲーム", "料理"];
 
@@ -19,7 +20,8 @@ export default function MyPage() {
   const { toast } = useToast();
   const { signOut } = useAuth();
   const [editing, setEditing] = useState(false);
-  const [name, setName] = useState(me?.name ?? "");
+  const [lastName, setLastName] = useState("");
+  const [firstName, setFirstName] = useState("");
   const [department, setDepartment] = useState(me?.department ?? "");
   const [selectedTags, setSelectedTags] = useState<string[]>(me?.interestTags ?? []);
 
@@ -38,11 +40,19 @@ export default function MyPage() {
   };
 
   const handleSave = () => {
-    updateMutation.mutate({ data: { name: name.trim() || undefined, department: department.trim() || undefined, interestTags: selectedTags } });
+    if (!lastName.trim() || !firstName.trim()) {
+      toast({ title: "苗字と名前を両方入力してください", variant: "destructive" });
+      return;
+    }
+    updateMutation.mutate({ data: { lastName, firstName, name: joinFullName(lastName, firstName), department: department.trim() || undefined, interestTags: selectedTags } });
   };
 
   const initEdit = () => {
-    setName(me?.name ?? "");
+    const parsed = me?.lastName && me?.firstName
+      ? { lastName: me.lastName, firstName: me.firstName }
+      : splitFullName(me?.name);
+    setLastName(parsed.lastName);
+    setFirstName(parsed.firstName);
     setDepartment(me?.department ?? "");
     setSelectedTags(me?.interestTags ?? []);
     setEditing(true);
@@ -64,9 +74,15 @@ export default function MyPage() {
         <div className="bg-card border border-border rounded-xl p-5 mb-4">
           {editing ? (
             <div className="space-y-4">
-              <div className="space-y-1.5">
-                <Label>お名前</Label>
-                <Input value={name} onChange={(e) => setName(e.target.value)} placeholder="山田 太郎" />
+              <div className="grid grid-cols-2 gap-3">
+                <div className="space-y-1.5">
+                  <Label htmlFor="profile-last-name">苗字</Label>
+                  <Input id="profile-last-name" value={lastName} onChange={(e) => setLastName(e.target.value)} placeholder="山田" maxLength={50} required />
+                </div>
+                <div className="space-y-1.5">
+                  <Label htmlFor="profile-first-name">名前</Label>
+                  <Input id="profile-first-name" value={firstName} onChange={(e) => setFirstName(e.target.value)} placeholder="太郎" maxLength={50} required />
+                </div>
               </div>
               <div className="space-y-1.5">
                 <Label>部署・チーム</Label>
@@ -128,7 +144,7 @@ export default function MyPage() {
           <div className="bg-card border border-border rounded-xl p-3 text-center">
             <Award size={16} className="mx-auto mb-1 text-primary" />
             <p className="text-2xl font-bold">{stats?.hosted ?? 0}</p>
-            <p className="text-xs text-muted-foreground">開いた会</p>
+            <p className="text-xs text-muted-foreground">開催した会</p>
           </div>
           <div className="bg-card border border-border rounded-xl p-3 text-center">
             <Users size={16} className="mx-auto mb-1 text-primary" />
@@ -141,7 +157,7 @@ export default function MyPage() {
         <div className="bg-card border border-border rounded-xl divide-y divide-border">
           {[
             { href: "/my/applications", label: "参加履歴・申込中の会", icon: Calendar },
-            { href: "/my/hosted", label: "ひらいた会", icon: Award },
+            { href: "/my/hosted", label: "開催した会", icon: Award },
           ].map(({ href, label, icon: Icon }) => (
             <Link key={href} href={href}>
               <div className="flex items-center justify-between p-4 hover:bg-muted/30 transition-colors cursor-pointer">

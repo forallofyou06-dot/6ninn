@@ -7,6 +7,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Plus, X } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
+import { joinFullName, splitFullName } from "@/lib/name";
 
 const PRESET_TAGS = [
   "食", "映画", "読書", "音楽", "旅", "スポーツ", "アウトドア",
@@ -17,14 +18,21 @@ export default function Onboarding() {
   const [, setLocation] = useLocation();
   const { data: profile } = useGetMe();
   const { toast } = useToast();
-  const [name, setName] = useState(profile?.name ?? "");
+  const [lastName, setLastName] = useState("");
+  const [firstName, setFirstName] = useState("");
   const [department, setDepartment] = useState("");
   const [tags, setTags] = useState<string[]>([]);
   const [tagInput, setTagInput] = useState("");
   const updateMutation = useUpdateMe();
 
   useEffect(() => {
-    if (profile?.name) setName(profile.name);
+    if (profile?.name) {
+      const parsed = profile.lastName && profile.firstName
+        ? { lastName: profile.lastName, firstName: profile.firstName }
+        : splitFullName(profile.name);
+      setLastName(parsed.lastName);
+      setFirstName(parsed.firstName);
+    }
     if (profile?.department) setDepartment(profile.department);
     if (profile?.interestTags?.length) setTags(profile.interestTags);
   }, [profile]);
@@ -40,13 +48,13 @@ export default function Onboarding() {
   };
 
   const handleSubmit = async () => {
-    if (!name.trim()) {
-      toast({ title: "氏名を入力してください", variant: "destructive" });
+    if (!lastName.trim() || !firstName.trim()) {
+      toast({ title: "苗字と名前を両方入力してください", variant: "destructive" });
       return;
     }
     try {
       await updateMutation.mutateAsync({
-        data: { name: name.trim(), department: department.trim(), interestTags: tags },
+        data: { lastName, firstName, name: joinFullName(lastName, firstName), department: department.trim(), interestTags: tags },
       });
       toast({ title: "プロフィールを登録しました！" });
       setLocation("/events");
@@ -72,17 +80,37 @@ export default function Onboarding() {
         </div>
 
         <div className="space-y-5">
-          <div className="space-y-1.5">
-            <Label htmlFor="name">
-              氏名 <span className="text-destructive text-xs">必須</span>
-            </Label>
-            <Input
-              id="name"
-              placeholder="山田 太郎"
-              value={name}
-              onChange={(e) => setName(e.target.value)}
-              data-testid="input-name"
-            />
+          <div className="grid grid-cols-2 gap-3">
+            <div className="space-y-1.5">
+              <Label htmlFor="last-name">
+                苗字 <span className="text-destructive text-xs">必須</span>
+              </Label>
+              <Input
+                id="last-name"
+                placeholder="山田"
+                value={lastName}
+                onChange={(e) => setLastName(e.target.value)}
+                autoComplete="family-name"
+                maxLength={50}
+                required
+                data-testid="input-last-name"
+              />
+            </div>
+            <div className="space-y-1.5">
+              <Label htmlFor="first-name">
+                名前 <span className="text-destructive text-xs">必須</span>
+              </Label>
+              <Input
+                id="first-name"
+                placeholder="太郎"
+                value={firstName}
+                onChange={(e) => setFirstName(e.target.value)}
+                autoComplete="given-name"
+                maxLength={50}
+                required
+                data-testid="input-first-name"
+              />
+            </div>
           </div>
 
           <div className="space-y-1.5">
@@ -160,7 +188,7 @@ export default function Onboarding() {
             <Button
               className="w-full"
               onClick={handleSubmit}
-              disabled={updateMutation.isPending || !name.trim()}
+              disabled={updateMutation.isPending || !lastName.trim() || !firstName.trim()}
               data-testid="button-submit-profile"
             >
               {updateMutation.isPending ? "登録中..." : "はじめる →"}

@@ -49,7 +49,7 @@ export default function MyApplications() {
             参加履歴
           </button>
           <button onClick={() => setTab("hosted")} className={`flex-1 text-sm py-1.5 rounded-md font-medium transition-colors ${tab === "hosted" ? "bg-background shadow-sm" : "text-muted-foreground"}`}>
-            ひらいた会
+            開催した会
           </button>
         </div>
 
@@ -105,8 +105,8 @@ export default function MyApplications() {
           !hostedEvents?.length ? (
             <div className="text-center py-12 text-muted-foreground">
               <ChevronRight size={32} className="mx-auto mb-2 opacity-30" />
-              <p className="text-sm">まだ会を開いたことがありません</p>
-              <Link href="/events/new"><span className="text-xs text-primary mt-2 inline-block">はじめての会をひらく →</span></Link>
+              <p className="text-sm">まだ会を開催したことがありません</p>
+              <Link href="/events/new"><span className="text-xs text-primary mt-2 inline-block">はじめての会を開催する →</span></Link>
             </div>
           ) : (
             <div className="space-y-3">

@@ -29,14 +29,14 @@ export default function Rules() {
         <div className="bg-primary/5 border border-primary/20 rounded-xl p-4 mb-6">
           <p className="text-sm text-primary font-medium mb-2">🎯 コンセプト</p>
           <p className="text-sm text-muted-foreground leading-relaxed">
-            偶然の6人は、社内でお互いをもっとよく知るための少人数交流会を気軽にひらけるツールです。
+            偶然の6人は、社内でお互いをもっとよく知るための少人数交流会を気軽に開催できるツールです。
             日頃は話したことのない人と、共通の趣味や話題を通じてつながるきっかけを作ります。
           </p>
         </div>
 
         <Section icon={Users} title="参加人数">
           <p>1回の交流会は最大<strong>6人</strong>まで。少人数だからこそ、一人ひとりとしっかり話せます。</p>
-          <p>ホストが設定した「最低実行人数」に満たない場合、締切日に自動キャンセルとなります。</p>
+          <p>最低催行人数は、主催者を含めて<strong>3人</strong>です。締切時点で3人未満の場合は自動で未実施となります。</p>
         </Section>
 
         <Section icon={Clock} title="開催時間">
