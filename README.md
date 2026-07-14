@@ -7,7 +7,7 @@
 - Frontend: React 19, Vite, Tailwind CSS, shadcn/ui
 - Hosting: GitHub Pages
 - Database: Supabase PostgreSQL
-- Authentication: Supabase Auth（メールリンク）
+- Authentication: Supabase Auth（メールアドレス・パスワード）
 - Authorization: PostgreSQL Row Level Security + RPC
 - Data fetching: Supabase JavaScript client + TanStack Query
 
