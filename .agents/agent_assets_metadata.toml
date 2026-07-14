@@ -6,3 +6,9 @@ id = "x08gHaJDaXS9yyzrgNUib"
 uri = "file://guuzen-no-6nin.zip"
 type = "unspecified"
 title = "偶然の6人 ソースコード（最新版）"
+
+[[outputs]]
+id = "yX7x5PPpxje2ezD-IuLtF"
+uri = "file://source.zip"
+type = "unspecified"
+title = "偶然の6人 ソースコード一式"
