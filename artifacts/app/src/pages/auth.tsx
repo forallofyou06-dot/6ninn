@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Link } from "wouter";
 import { Mail, ArrowLeft, CheckCircle } from "lucide-react";
 import { supabase } from "@workspace/api-client-react";
@@ -8,16 +8,60 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useToast } from "@/hooks/use-toast";
 
+const EMAIL_COOLDOWN_MS = 60_000;
+const EMAIL_SENT_AT_KEY = "guuzen-no-6nin-auth-email-sent-at";
+
+type AuthErrorDetails = {
+  code?: string;
+  message?: string;
+  status?: number;
+};
+
+function isEmailRateLimitError(error: unknown) {
+  if (!error || typeof error !== "object") return false;
+  const { code, message, status } = error as AuthErrorDetails;
+  const details = `${code ?? ""} ${message ?? ""}`.toLowerCase();
+  return status === 429 || details.includes("rate limit") || details.includes("rate_limit");
+}
+
+function getStoredSentAt() {
+  try {
+    return Number(window.localStorage.getItem(EMAIL_SENT_AT_KEY)) || 0;
+  } catch {
+    return 0;
+  }
+}
+
+function storeSentAt() {
+  try {
+    window.localStorage.setItem(EMAIL_SENT_AT_KEY, String(Date.now()));
+  } catch {
+    // The server still enforces its own rate limit when storage is unavailable.
+  }
+}
+
 export default function AuthPage({ mode }: { mode: "sign-in" | "sign-up" }) {
   const [email, setEmail] = useState("");
   const [loading, setLoading] = useState(false);
   const [sent, setSent] = useState(false);
+  const [retryAfter, setRetryAfter] = useState(0);
   const { toast } = useToast();
   const isSignUp = mode === "sign-up";
 
+  useEffect(() => {
+    const updateRetryAfter = () => {
+      const remaining = EMAIL_COOLDOWN_MS - (Date.now() - getStoredSentAt());
+      setRetryAfter(Math.max(0, Math.ceil(remaining / 1000)));
+    };
+
+    updateRetryAfter();
+    const timer = window.setInterval(updateRetryAfter, 1000);
+    return () => window.clearInterval(timer);
+  }, []);
+
   const submit = async (event: React.FormEvent) => {
     event.preventDefault();
-    if (!email.trim()) return;
+    if (!email.trim() || retryAfter > 0) return;
     setLoading(true);
     try {
       const redirectTo = new URL(import.meta.env.BASE_URL, window.location.origin).toString();
@@ -29,10 +73,23 @@ export default function AuthPage({ mode }: { mode: "sign-in" | "sign-up" }) {
         },
       });
       if (error) throw error;
+      storeSentAt();
+      setRetryAfter(Math.ceil(EMAIL_COOLDOWN_MS / 1000));
       setSent(true);
     } catch (error) {
+      if (isEmailRateLimitError(error)) {
+        storeSentAt();
+        setRetryAfter(Math.ceil(EMAIL_COOLDOWN_MS / 1000));
+        toast({
+          title: "認証メールの送信上限に達しました",
+          description: "現在はメールを送れません。最大1時間ほど空けてから、もう一度お試しください。",
+          variant: "destructive",
+        });
+        return;
+      }
       toast({
-        title: error instanceof Error ? error.message : "認証メールを送信できませんでした",
+        title: "認証メールを送信できませんでした",
+        description: error instanceof Error ? error.message : "時間をおいて、もう一度お試しください。",
         variant: "destructive",
       });
     } finally {
@@ -78,9 +135,18 @@ export default function AuthPage({ mode }: { mode: "sign-in" | "sign-up" }) {
                     required
                   />
                 </div>
-                <Button type="submit" className="w-full h-11" disabled={loading}>
-                  {loading ? "送信中..." : "ログインリンクを送る"}
+                <Button type="submit" className="w-full h-11" disabled={loading || retryAfter > 0}>
+                  {loading
+                    ? "送信中..."
+                    : retryAfter > 0
+                      ? `再送まで ${retryAfter}秒`
+                      : "ログインリンクを送る"}
                 </Button>
+                {retryAfter > 0 && (
+                  <p className="text-xs text-muted-foreground text-center" aria-live="polite">
+                    認証メールの連続送信を防ぐため、少しお待ちください
+                  </p>
+                )}
               </form>
               <p className="text-xs text-muted-foreground mt-5 text-center">社内メールアドレスでの登録を推奨しています</p>
               <div className="text-sm text-center mt-5">

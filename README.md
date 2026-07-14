@@ -48,6 +48,12 @@ where email = 'YOUR_EMAIL';
 
 DB関数、制約、RLS、インデックス、Authユーザー同期トリガーはマイグレーションに含まれています。
 
+### Authentication email setup
+
+Supabase標準のメール送信機能は動作確認用で、プロジェクト全体で1時間に2通までです。本番運用ではSupabase Dashboardの `Authentication → Emails → SMTP Settings` でカスタムSMTPを設定してください。設定後は `Authentication → Rate Limits` で利用規模に合う送信上限を設定します。
+
+アプリ側では同じブラウザからの再送を60秒間停止し、送信上限に達した場合は日本語の案内を表示します。ただし、プロジェクト全体の送信枠を増やすにはカスタムSMTPの設定が必要です。
+
 ## GitHub Pages setup
 
 リポジトリの Settings → Secrets and variables → Actions に次のRepository secretsを追加します。
