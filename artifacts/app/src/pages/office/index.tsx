@@ -1,4 +1,4 @@
-import { useGetOfficeKpi, useListOfficeFeedbacks } from "@workspace/api-client-react";
+import { exportOfficeEventsCsv, useGetOfficeKpi, useListOfficeFeedbacks } from "@workspace/api-client-react";
 import { MobileLayout } from "@/components/layout/MobileLayout";
 import { Link } from "wouter";
 import { ChevronLeft, Download, BarChart3, Users, Calendar, MessageSquare, TrendingUp } from "lucide-react";
@@ -21,12 +21,7 @@ export default function OfficeDashboard() {
   const { data: kpi, isLoading: kpiLoading } = useGetOfficeKpi();
   const { data: feedbacks, isLoading: fbLoading } = useListOfficeFeedbacks();
 
-  const downloadCsv = () => {
-    const link = document.createElement("a");
-    link.href = "/api/office/export/events";
-    link.download = "events.csv";
-    link.click();
-  };
+  const downloadCsv = () => void exportOfficeEventsCsv();
 
   return (
     <MobileLayout>

@@ -11,6 +11,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { useToast } from "@/hooks/use-toast";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { deadlineEndJst } from "@/lib/datetime";
 
 function statusLabel(status: string) {
   if (status === "実施確定") return <span className="text-xs font-semibold px-2.5 py-1 bg-green-100 text-green-700 rounded-full">✓ 実施確定</span>;
@@ -62,7 +63,7 @@ export default function EventDetail() {
 
   const datetime = new Date(event.datetime);
   const endDatetime = new Date(datetime.getTime() + event.durationMinutes * 60000);
-  const isPastDeadline = new Date() > new Date(event.deadline);
+  const isPastDeadline = new Date() > deadlineEndJst(event.deadline);
   const isEnded = event.status === "開催済" || event.status === "未実施";
   const hostReports = reports?.filter(r => r.type === "開催者報告") ?? [];
   const participantReports = reports?.filter(r => r.type === "参加者感想") ?? [];

@@ -8,7 +8,7 @@ import { useQueryClient } from "@tanstack/react-query";
 import { useToast } from "@/hooks/use-toast";
 import { Link } from "wouter";
 import { Users, Calendar, Award, ChevronRight, Edit3, LogOut } from "lucide-react";
-import { useClerk } from "@clerk/react";
+import { useAuth } from "@/lib/auth";
 
 const PRESET_TAGS = ["食", "映画", "読書", "音楽", "旅", "スポーツ", "テクノロジー", "アート", "韓国", "猫", "歴史", "ゲーム", "料理"];
 
@@ -17,7 +17,7 @@ export default function MyPage() {
   const { data: stats } = useGetMyStats();
   const queryClient = useQueryClient();
   const { toast } = useToast();
-  const clerk = useClerk();
+  const { signOut } = useAuth();
   const [editing, setEditing] = useState(false);
   const [name, setName] = useState(me?.name ?? "");
   const [department, setDepartment] = useState(me?.department ?? "");
@@ -55,7 +55,7 @@ export default function MyPage() {
       <div className="p-4 pb-24">
         <div className="flex items-center justify-between mb-6">
           <h1 className="text-xl font-serif font-bold">マイページ</h1>
-          <button onClick={() => clerk.signOut().then(() => { window.location.href = "/"; })} className="text-sm text-muted-foreground flex items-center gap-1">
+          <button onClick={() => signOut().then(() => { window.location.href = import.meta.env.BASE_URL; })} className="text-sm text-muted-foreground flex items-center gap-1">
             <LogOut size={14} /> サインアウト
           </button>
         </div>

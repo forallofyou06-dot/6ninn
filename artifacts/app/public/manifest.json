@@ -2,7 +2,7 @@
   "name": "偶然の6人",
   "short_name": "偶然の6人",
   "description": "少人数で、ゆるく集まる。社内交流会をかんたんにひらけるアプリ。",
-  "start_url": "/",
+  "start_url": "./",
   "display": "standalone",
   "background_color": "#ffffff",
   "theme_color": "#c9784a",
@@ -10,15 +10,15 @@
   "lang": "ja",
   "icons": [
     {
-      "src": "/icons/icon-192.png",
-      "sizes": "192x192",
-      "type": "image/png",
+      "src": "icons/icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
       "purpose": "any maskable"
     },
     {
-      "src": "/icons/icon-512.png",
-      "sizes": "512x512",
-      "type": "image/png",
+      "src": "icons/icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
       "purpose": "any maskable"
     }
   ]

@@ -1,8 +1,8 @@
 import { ReactNode } from "react";
 import { Link, useLocation } from "wouter";
 import { Home, PlusCircle, User, Bell } from "lucide-react";
-import { Show } from "@clerk/react";
 import { useListNotifications } from "@workspace/api-client-react";
+import { useAuth } from "@/lib/auth";
 
 function NotificationBell() {
   const { data: notifications } = useListNotifications();
@@ -25,6 +25,7 @@ function NotificationBell() {
 
 export function MobileLayout({ children, hideNav = false }: { children: ReactNode; hideNav?: boolean }) {
   const [location] = useLocation();
+  const { user } = useAuth();
 
   return (
     <div className="min-h-[100dvh] bg-background w-full flex justify-center text-foreground font-sans">
@@ -33,8 +34,7 @@ export function MobileLayout({ children, hideNav = false }: { children: ReactNod
           {children}
         </main>
 
-        {!hideNav && (
-          <Show when="signed-in">
+        {!hideNav && user && (
             <nav className="fixed bottom-0 left-1/2 -translate-x-1/2 w-full max-w-[430px] h-[64px] bg-background/90 backdrop-blur border-t border-border flex items-center justify-around px-4 pb-safe z-50">
               <Link href="/events" className={`flex flex-col items-center gap-1 p-2 ${location === "/events" ? "text-primary" : "text-muted-foreground"}`}>
                 <Home size={24} strokeWidth={1.5} />
@@ -50,7 +50,6 @@ export function MobileLayout({ children, hideNav = false }: { children: ReactNod
                 <span className="text-[10px]">マイページ</span>
               </Link>
             </nav>
-          </Show>
         )}
       </div>
     </div>
