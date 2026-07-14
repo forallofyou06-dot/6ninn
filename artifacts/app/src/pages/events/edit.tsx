@@ -27,7 +27,6 @@ export default function EditEvent() {
   const [locationUrl, setLocationUrl] = useState("");
   const [fee, setFee] = useState(0);
   const [capacity, setCapacity] = useState(6);
-  const [minParticipants, setMinParticipants] = useState(2);
   const [deadline, setDeadline] = useState("");
   const [notes, setNotes] = useState("");
   const [selectedTags, setSelectedTags] = useState<string[]>([]);
@@ -43,7 +42,6 @@ export default function EditEvent() {
       setLocationUrl(event.locationUrl ?? "");
       setFee(event.fee);
       setCapacity(event.capacity);
-      setMinParticipants(event.minParticipants);
       setDeadline(event.deadline);
       setNotes(event.notes ?? "");
       setSelectedTags(event.tags);
@@ -63,12 +61,14 @@ export default function EditEvent() {
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
+    if (!deadline) { toast({ title: "締切日を入力してください", variant: "destructive" }); return; }
+    if (deadline > datetime.slice(0, 10)) { toast({ title: "申込締切日は開催日以前にしてください", variant: "destructive" }); return; }
     if (fee > 5000) { toast({ title: "会費は5,000円以内にしてください", variant: "destructive" }); return; }
     if (capacity < 3 || capacity > 6) { toast({ title: "定員は3〜6人にしてください", variant: "destructive" }); return; }
     if (durationMinutes > 120) { toast({ title: "開催時間は2時間以内にしてください", variant: "destructive" }); return; }
     updateMutation.mutate({
       id,
-      data: { theme, subTheme: subTheme || undefined, datetime, durationMinutes, location, locationUrl: locationUrl || undefined, fee, capacity, minParticipants, deadline, notes: notes || undefined, tags: selectedTags } as any,
+      data: { theme, subTheme: subTheme || undefined, datetime, durationMinutes, location, locationUrl: locationUrl || undefined, fee, capacity, minParticipants: 3, deadline, notes: notes || undefined, tags: selectedTags } as any,
     });
   };
 
@@ -124,7 +124,7 @@ export default function EditEvent() {
             <Label>場所のURL（任意）</Label>
             <Input value={locationUrl} onChange={(e) => setLocationUrl(e.target.value)} />
           </div>
-          <div className="grid grid-cols-3 gap-3">
+          <div className="grid grid-cols-2 gap-3">
             <div className="space-y-1.5">
               <Label>参加費（円）</Label>
               <Input type="number" min={0} max={5000} step={100} value={fee} onChange={(e) => setFee(Number(e.target.value))} />
@@ -138,19 +138,18 @@ export default function EditEvent() {
                 ))}
               </div>
             </div>
-            <div className="space-y-1.5">
-              <Label>最低実行人数</Label>
-              <div className="flex gap-1">
-                {[2, 3, 4].map((n) => (
-                  <button key={n} type="button" onClick={() => setMinParticipants(n)}
-                    className={`flex-1 text-sm py-2 rounded-md border ${minParticipants === n ? "bg-primary text-primary-foreground border-primary" : "border-border"}`}>{n}</button>
-                ))}
+            <div className="col-span-2 flex items-center justify-between rounded-xl border border-primary/20 bg-primary/5 px-4 py-3">
+              <div>
+                <p className="text-sm font-medium">最低催行人数</p>
+                <p className="text-xs text-muted-foreground">主催者を含めて3人以上で開催確定</p>
               </div>
+              <span className="text-base font-bold text-primary">3人固定</span>
             </div>
           </div>
           <div className="space-y-1.5">
-            <Label>締切日</Label>
-            <Input type="date" value={deadline} onChange={(e) => setDeadline(e.target.value)} required />
+            <Label>申込締切日</Label>
+            <Input type="date" value={deadline} onChange={(e) => setDeadline(e.target.value)} max={datetime.slice(0, 10) || undefined} required />
+            <p className="text-xs text-muted-foreground">この日の23:59まで申し込めます</p>
           </div>
           <div className="space-y-1.5">
             <Label>その他注意事項（任意）</Label>

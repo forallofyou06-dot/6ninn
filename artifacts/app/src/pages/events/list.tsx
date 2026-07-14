@@ -1,12 +1,12 @@
 import { useState } from "react";
 import { useListEvents } from "@workspace/api-client-react";
 import { MobileLayout } from "@/components/layout/MobileLayout";
-import { format, isPast } from "date-fns";
+import { format } from "date-fns";
 import { ja } from "date-fns/locale";
 import { Link } from "wouter";
-import { Calendar, MapPin, Users, ChevronRight, SlidersHorizontal, X } from "lucide-react";
+import { Calendar, MapPin, Users, ChevronRight, SlidersHorizontal, X, Clock3 } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
+import { deadlineEndJst } from "@/lib/datetime";
 
 const PRESET_TAGS = ["食", "映画", "読書", "音楽", "旅", "スポーツ", "テクノロジー", "アート", "韓国", "猫", "歴史", "ゲーム", "料理"];
 const SORT_OPTIONS = [
@@ -24,9 +24,10 @@ function statusBadge(status: string) {
 
 function EventCard({ event }: { event: any }) {
   const dateObj = new Date(event.datetime);
+  const isFull = event.remainingSeats === 0 && !["開催済", "未実施"].includes(event.status);
   return (
     <Link href={`/events/${event.id}`}>
-      <div className="bg-card border border-border p-4 rounded-xl shadow-sm hover:shadow-md transition-shadow cursor-pointer active:scale-[0.99]">
+      <div className={`border p-4 rounded-xl shadow-sm hover:shadow-md transition-shadow cursor-pointer active:scale-[0.99] ${event.isDeadlineSoon ? "bg-amber-50/70 border-amber-300 ring-1 ring-amber-200" : "bg-card border-border"}`}>
         {event.tags.length > 0 && (
           <div className="flex gap-1.5 flex-wrap mb-2">
             {event.tags.slice(0, 3).map((tag: string) => (
@@ -36,7 +37,11 @@ function EventCard({ event }: { event: any }) {
         )}
         <div className="flex justify-between items-start">
           <h2 className="text-base font-bold leading-snug flex-1 pr-2">{event.theme}</h2>
-          {statusBadge(event.status)}
+          <div className="flex items-center justify-end gap-1.5 flex-wrap">
+            {event.isDeadlineSoon && <span className="text-xs font-semibold px-2 py-0.5 bg-amber-500 text-white rounded-full">締切間近</span>}
+            {isFull && <span className="text-xs font-semibold px-2 py-0.5 bg-rose-100 text-rose-700 rounded-full">満席</span>}
+            {statusBadge(event.status)}
+          </div>
         </div>
         {event.subTheme && <p className="text-xs text-muted-foreground mt-0.5">{event.subTheme}</p>}
 
@@ -44,6 +49,10 @@ function EventCard({ event }: { event: any }) {
           <div className="flex items-center gap-2">
             <Calendar size={13} />
             <span>{format(dateObj, "M月d日(E) HH:mm", { locale: ja })}</span>
+          </div>
+          <div className={`flex items-center gap-2 ${event.isDeadlineSoon ? "font-semibold text-amber-700" : ""}`}>
+            <Clock3 size={13} />
+            <span>申込締切: {format(deadlineEndJst(event.deadline), "M月d日(E)", { locale: ja })}</span>
           </div>
           <div className="flex items-center gap-2">
             <MapPin size={13} />
@@ -60,7 +69,7 @@ function EventCard({ event }: { event: any }) {
               {event.remainingSeats > 0 ? (
                 <span className="text-xs text-primary font-medium">あと{event.remainingSeats}席</span>
               ) : (
-                <span className="text-xs text-muted-foreground">満席</span>
+                <span className="text-xs font-semibold text-rose-700">満席</span>
               )}
             </div>
             <span className="font-medium text-foreground">¥{event.fee.toLocaleString()}</span>
@@ -108,10 +117,17 @@ export default function EventsList() {
     tag: selectedTag,
     sortBy,
   });
-  const { data: confirmedEvents } = useListEvents({ status: "実施確定", sortBy: "near" });
+  const { data: confirmedEvents } = useListEvents({ status: "実施確定", tag: selectedTag, sortBy });
   const { data: closedEvents } = useListEvents({ status: "開催済", sortBy: "near" });
 
-  const activeEvents = [...(openEvents ?? []), ...(confirmedEvents ?? [])];
+  const activeEvents = [...(openEvents ?? []), ...(confirmedEvents ?? [])]
+    .sort((a, b) => {
+      const deadlinePriority = Number(b.isDeadlineSoon) - Number(a.isDeadlineSoon);
+      if (deadlinePriority !== 0) return deadlinePriority;
+      if (sortBy === "near") return new Date(a.datetime).getTime() - new Date(b.datetime).getTime();
+      if (sortBy === "seats") return a.remainingSeats - b.remainingSeats;
+      return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
+    });
   const endedEvents = closedEvents ?? [];
 
   return (

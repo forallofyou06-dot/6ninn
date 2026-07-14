@@ -42,7 +42,7 @@ export function MobileLayout({ children, hideNav = false }: { children: ReactNod
               </Link>
               <Link href="/events/new" className={`flex flex-col items-center gap-1 p-2 ${location === "/events/new" ? "text-primary" : "text-muted-foreground"}`}>
                 <PlusCircle size={24} strokeWidth={1.5} />
-                <span className="text-[10px]">ひらく</span>
+                <span className="text-[10px]">開催</span>
               </Link>
               <NotificationBell />
               <Link href="/my" className={`flex flex-col items-center gap-1 p-2 ${location === "/my" ? "text-primary" : "text-muted-foreground"}`}>

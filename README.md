@@ -1,6 +1,6 @@
 # 偶然の6人
 
-社内の少人数交流会（最大6人・2時間・5,000円以内）を気軽にひらける、モバイルファーストWebアプリです。
+社内の少人数交流会（最大6人・2時間・5,000円以内）を気軽に開催できる、モバイルファーストWebアプリです。
 
 ## Architecture
 
@@ -34,7 +34,10 @@ BASE_PATH=/
 ## Supabase setup
 
 1. Supabaseでプロジェクトを作成します。
-2. SQL Editorで [`supabase/migrations/202607140001_initial_schema.sql`](supabase/migrations/202607140001_initial_schema.sql) を実行します。
+2. SQL Editorで次のマイグレーションを番号順に実行します。
+   - [`supabase/migrations/202607140001_initial_schema.sql`](supabase/migrations/202607140001_initial_schema.sql)
+   - [`supabase/migrations/202607140002_event_rules_and_names.sql`](supabase/migrations/202607140002_event_rules_and_names.sql)
+   - すでに`001`を実行済みの場合は、`002`だけを実行してください。
 3. Authentication → URL Configurationを開きます。
 4. Site URLを `https://forallofyou06-dot.github.io/6ninn/` に設定します。
 5. Redirect URLsにも同じURLを追加します。
@@ -46,7 +49,7 @@ set role = 'maintainer'
 where email = 'YOUR_EMAIL';
 ```
 
-DB関数、制約、RLS、インデックス、Authユーザー同期トリガーはマイグレーションに含まれています。
+DB関数、制約、RLS、インデックス、Authユーザー同期トリガーはマイグレーションに含まれています。最低催行人数は主催者を含めて3人固定です。
 
 ### Authentication email setup
 

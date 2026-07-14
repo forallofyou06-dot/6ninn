@@ -65,6 +65,7 @@ export default function EventDetail() {
   const endDatetime = new Date(datetime.getTime() + event.durationMinutes * 60000);
   const isPastDeadline = new Date() > deadlineEndJst(event.deadline);
   const isEnded = event.status === "開催済" || event.status === "未実施";
+  const isFull = event.remainingSeats === 0 && !isEnded;
   const hostReports = reports?.filter(r => r.type === "開催者報告") ?? [];
   const participantReports = reports?.filter(r => r.type === "参加者感想") ?? [];
 
@@ -87,7 +88,11 @@ export default function EventDetail() {
               <span key={tag} className="text-xs bg-secondary text-secondary-foreground px-2 py-0.5 rounded-full">#{tag}</span>
             ))}
           </div>
-          {statusLabel(event.status)}
+          <div className="flex items-center gap-1.5 flex-wrap justify-end">
+            {event.isDeadlineSoon && <span className="text-xs font-semibold px-2.5 py-1 bg-amber-500 text-white rounded-full">締切間近</span>}
+            {isFull && <span className="text-xs font-semibold px-2.5 py-1 bg-rose-100 text-rose-700 rounded-full">満席</span>}
+            {statusLabel(event.status)}
+          </div>
         </div>
 
         {/* Title */}
@@ -141,8 +146,9 @@ export default function EventDetail() {
                 {event.remainingSeats > 0 && !isPastDeadline && (
                   <span className="text-xs font-medium text-primary">あと{event.remainingSeats}席</span>
                 )}
+                {isFull && <span className="text-xs font-semibold text-rose-700">満席</span>}
               </div>
-              <p className="text-xs text-muted-foreground mt-1">最低実行人数: {event.minParticipants}人 · 締切: {event.deadline}</p>
+              <p className={`text-xs mt-1 ${event.isDeadlineSoon ? "font-semibold text-amber-700" : "text-muted-foreground"}`}>最低催行人数: 3人（固定） · 申込締切: {event.deadline}</p>
             </div>
           </div>
           {event.notes && (

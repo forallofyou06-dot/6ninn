@@ -37,6 +37,8 @@ export type UserProfile = {
   id: string;
   email: string;
   name: string | null;
+  lastName: string | null;
+  firstName: string | null;
   department: string | null;
   role: "member" | "office" | "maintainer";
   interestTags: string[];
@@ -64,6 +66,7 @@ export type EventRecord = {
   participantsCount: number;
   remainingSeats: number;
   status: "募集中" | "実施確定" | "開催済" | "未実施";
+  isDeadlineSoon: boolean;
   isApplied: boolean;
   isHost: boolean;
   createdAt: string;
@@ -150,6 +153,15 @@ function rpcObject<T>(value: unknown): T {
   return value as T;
 }
 
+function normalizeProfile(profile: UserProfile): UserProfile {
+  const [lastName = "", ...firstNameParts] = (profile.name ?? "").trim().split(/\s+/).filter(Boolean);
+  return {
+    ...profile,
+    lastName: (profile.lastName ?? lastName) || null,
+    firstName: (profile.firstName ?? firstNameParts.join(" ")) || null,
+  };
+}
+
 function toIsoDatetime(value: string): string {
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) throw new Error("開催日時が不正です");
@@ -166,10 +178,22 @@ function eventParams(data: Record<string, unknown>) {
     p_location_url: String(data.locationUrl ?? ""),
     p_fee: Number(data.fee),
     p_capacity: Number(data.capacity),
-    p_min_participants: Number(data.minParticipants),
+    p_min_participants: 3,
     p_deadline: String(data.deadline ?? ""),
     p_notes: String(data.notes ?? ""),
     p_tags: Array.isArray(data.tags) ? data.tags.map(String) : [],
+  };
+}
+
+function normalizeEvent(event: EventRecord): EventRecord {
+  const deadlineTime = new Date(`${event.deadline}T23:59:59+09:00`).getTime();
+  const remaining = deadlineTime - Date.now();
+  return {
+    ...event,
+    minParticipants: 3,
+    isDeadlineSoon: event.isDeadlineSoon ?? (
+      ["募集中", "実施確定"].includes(event.status) && remaining >= 0 && remaining <= 3 * 24 * 60 * 60 * 1000
+    ),
   };
 }
 
@@ -187,7 +211,7 @@ export function useGetMe(options: QueryOptions<UserProfile> = {}) {
     queryKey: getGetMeQueryKey(),
     queryFn: async () => {
       const result = await supabase.rpc("get_my_profile");
-      return rpcObject<UserProfile>(throwIfError(result));
+      return normalizeProfile(rpcObject<UserProfile>(throwIfError(result)));
     },
     ...(options.query ?? {}),
   } as any);
@@ -196,12 +220,22 @@ export function useGetMe(options: QueryOptions<UserProfile> = {}) {
 export function useUpdateMe(options: MutationOptions<UserProfile, { data: Record<string, unknown> }> = {}) {
   return useMutation<UserProfile, Error, { data: Record<string, unknown> }>({
     mutationFn: async ({ data }: { data: Record<string, unknown> }) => {
-      const result = await supabase.rpc("update_my_profile", {
-        p_name: String(data.name ?? ""),
+      const lastName = String(data.lastName ?? "").trim();
+      const firstName = String(data.firstName ?? "").trim();
+      let result = await supabase.rpc("update_my_profile", {
+        p_last_name: lastName,
+        p_first_name: firstName,
         p_department: String(data.department ?? ""),
         p_interest_tags: Array.isArray(data.interestTags) ? data.interestTags.map(String) : [],
       });
-      return rpcObject<UserProfile>(throwIfError(result));
+      if (result.error?.message.includes("update_my_profile")) {
+        result = await supabase.rpc("update_my_profile", {
+          p_name: `${lastName} ${firstName}`,
+          p_department: String(data.department ?? ""),
+          p_interest_tags: Array.isArray(data.interestTags) ? data.interestTags.map(String) : [],
+        });
+      }
+      return normalizeProfile(rpcObject<UserProfile>(throwIfError(result)));
     },
     ...(options.mutation ?? {}),
   } as any);
@@ -219,7 +253,11 @@ export function useListEvents(
         p_tag: params.tag ?? null,
         p_sort_by: params.sortBy ?? "new",
       });
-      return rpcRows<EventRecord>(throwIfError(result));
+      const events = rpcRows<EventRecord>(throwIfError(result)).map(normalizeEvent);
+      if ((params.sortBy ?? "new") === "new") {
+        events.sort((a, b) => Number(b.isDeadlineSoon) - Number(a.isDeadlineSoon));
+      }
+      return events;
     },
     ...(options.query ?? {}),
   } as any);
@@ -230,7 +268,7 @@ export function useGetEvent(id: number, options: QueryOptions<EventRecord> = {})
     queryKey: getGetEventQueryKey(id),
     queryFn: async () => {
       const result = await supabase.rpc("get_event", { p_event_id: id });
-      return rpcObject<EventRecord>(throwIfError(result));
+      return normalizeEvent(rpcObject<EventRecord>(throwIfError(result)));
     },
     ...(options.query ?? {}),
   } as any);
@@ -240,7 +278,7 @@ export function useCreateEvent(options: MutationOptions<EventRecord, { data: Rec
   return useMutation<EventRecord, Error, { data: Record<string, unknown> }>({
     mutationFn: async ({ data }: { data: Record<string, unknown> }) => {
       const result = await supabase.rpc("create_event", eventParams(data));
-      return rpcObject<EventRecord>(throwIfError(result));
+      return normalizeEvent(rpcObject<EventRecord>(throwIfError(result)));
     },
     ...(options.mutation ?? {}),
   } as any);
@@ -253,7 +291,7 @@ export function useUpdateEvent(options: MutationOptions<EventRecord, { id: numbe
         p_event_id: id,
         ...eventParams(data),
       });
-      return rpcObject<EventRecord>(throwIfError(result));
+      return normalizeEvent(rpcObject<EventRecord>(throwIfError(result)));
     },
     ...(options.mutation ?? {}),
   } as any);
@@ -285,7 +323,10 @@ export function useCancelParticipation(options: MutationOptions<unknown, { id: n
 export function useListMyApplications(options: QueryOptions<ApplicationRecord[]> = {}) {
   return useQuery<ApplicationRecord[]>({
     queryKey: getListMyApplicationsQueryKey(),
-    queryFn: async () => rpcRows<ApplicationRecord>(throwIfError(await supabase.rpc("list_my_applications"))),
+    queryFn: async () => rpcRows<ApplicationRecord>(throwIfError(await supabase.rpc("list_my_applications"))).map((application) => ({
+      ...application,
+      event: application.event ? normalizeEvent(application.event) : null,
+    })),
     ...(options.query ?? {}),
   } as any);
 }
@@ -293,7 +334,7 @@ export function useListMyApplications(options: QueryOptions<ApplicationRecord[]>
 export function useListMyHostedEvents(options: QueryOptions<EventRecord[]> = {}) {
   return useQuery<EventRecord[]>({
     queryKey: getListMyHostedEventsQueryKey(),
-    queryFn: async () => rpcRows<EventRecord>(throwIfError(await supabase.rpc("list_my_hosted_events"))),
+    queryFn: async () => rpcRows<EventRecord>(throwIfError(await supabase.rpc("list_my_hosted_events"))).map(normalizeEvent),
     ...(options.query ?? {}),
   } as any);
 }
@@ -398,7 +439,7 @@ function csvCell(value: unknown): string {
 }
 
 export async function exportOfficeEventsCsv(): Promise<void> {
-  const events = rpcRows<EventRecord>(throwIfError(await supabase.rpc("list_office_events")));
+  const events = rpcRows<EventRecord>(throwIfError(await supabase.rpc("list_office_events"))).map(normalizeEvent);
   const header = ["id", "テーマ", "状態", "開催日時", "場所", "会費", "定員", "参加者数", "ホスト", "締切日", "作成日時"];
   const rows = events.map((event) => [
     event.id, event.theme, event.status, event.datetime, event.location, event.fee,
