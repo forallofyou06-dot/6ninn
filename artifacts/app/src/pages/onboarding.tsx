@@ -1,6 +1,6 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useLocation } from "wouter";
-import { useUser, useAuth } from "@clerk/react";
+import { useGetMe, useUpdateMe } from "@workspace/api-client-react";
 import { MobileLayout } from "@/components/layout/MobileLayout";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -15,14 +15,19 @@ const PRESET_TAGS = [
 
 export default function Onboarding() {
   const [, setLocation] = useLocation();
-  const { user } = useUser();
-  const { getToken } = useAuth();
+  const { data: profile } = useGetMe();
   const { toast } = useToast();
-  const [name, setName] = useState(user?.fullName || user?.firstName || "");
+  const [name, setName] = useState(profile?.name ?? "");
   const [department, setDepartment] = useState("");
   const [tags, setTags] = useState<string[]>([]);
   const [tagInput, setTagInput] = useState("");
-  const [loading, setLoading] = useState(false);
+  const updateMutation = useUpdateMe();
+
+  useEffect(() => {
+    if (profile?.name) setName(profile.name);
+    if (profile?.department) setDepartment(profile.department);
+    if (profile?.interestTags?.length) setTags(profile.interestTags);
+  }, [profile]);
 
   const togglePreset = (t: string) => {
     setTags((prev) => prev.includes(t) ? prev.filter((x) => x !== t) : [...prev, t]);
@@ -39,28 +44,14 @@ export default function Onboarding() {
       toast({ title: "氏名を入力してください", variant: "destructive" });
       return;
     }
-    setLoading(true);
     try {
-      const token = await getToken();
-      const res = await fetch("/api/users/me", {
-        method: "PATCH",
-        headers: {
-          "Content-Type": "application/json",
-          ...(token ? { Authorization: `Bearer ${token}` } : {}),
-        },
-        body: JSON.stringify({
-          name: name.trim(),
-          department: department.trim() || null,
-          interestTags: tags,
-        }),
+      await updateMutation.mutateAsync({
+        data: { name: name.trim(), department: department.trim(), interestTags: tags },
       });
-      if (!res.ok) throw new Error(await res.text());
       toast({ title: "プロフィールを登録しました！" });
       setLocation("/events");
     } catch (e) {
       toast({ title: "エラーが発生しました。もう一度お試しください。", variant: "destructive" });
-    } finally {
-      setLoading(false);
     }
   };
 
@@ -169,10 +160,10 @@ export default function Onboarding() {
             <Button
               className="w-full"
               onClick={handleSubmit}
-              disabled={loading || !name.trim()}
+              disabled={updateMutation.isPending || !name.trim()}
               data-testid="button-submit-profile"
             >
-              {loading ? "登録中..." : "はじめる →"}
+              {updateMutation.isPending ? "登録中..." : "はじめる →"}
             </Button>
           </div>
         </div>

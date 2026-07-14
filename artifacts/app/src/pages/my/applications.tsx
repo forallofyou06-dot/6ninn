@@ -8,6 +8,7 @@ import { ChevronLeft, ChevronRight, Calendar, MapPin } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useToast } from "@/hooks/use-toast";
 import { useState } from "react";
+import { deadlineEndJst } from "@/lib/datetime";
 
 function statusBadge(status: string) {
   const colors: Record<string, string> = {
@@ -64,7 +65,7 @@ export default function MyApplications() {
               {applications.map((app: any) => {
                 const event = app.event;
                 if (!event) return null;
-                const isPastDeadline = new Date() > new Date(event.deadline);
+                const isPastDeadline = new Date() > deadlineEndJst(event.deadline);
                 const isActive = event.status === "募集中" || event.status === "実施確定";
                 return (
                   <div key={app.id} className="bg-card border border-border rounded-xl overflow-hidden">

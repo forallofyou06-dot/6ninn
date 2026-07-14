@@ -8,24 +8,21 @@
     <meta name="robots" content="noindex, nofollow" />
 
     <!-- PWA -->
-    <link rel="manifest" href="/manifest.json" />
+    <link rel="manifest" href="%BASE_URL%manifest.json" />
     <meta name="theme-color" content="#c9784a" />
     <meta name="mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-status-bar-style" content="default" />
     <meta name="apple-mobile-web-app-title" content="偶然の6人" />
-    <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
+    <link rel="apple-touch-icon" href="%BASE_URL%icons/icon.svg" />
 
     <!-- Icons -->
-    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
-    <link rel="icon" type="image/png" sizes="192x192" href="/icons/icon-192.png" />
+    <link rel="icon" type="image/svg+xml" href="%BASE_URL%favicon.svg" />
 
     <!-- OGP -->
     <meta property="og:title" content="偶然の6人" />
     <meta property="og:description" content="少人数で、ゆるく集まる。最大6人・2時間・5000円以内の社内交流会。" />
     <meta property="og:type" content="website" />
-    <meta property="og:image" content="/opengraph.jpg" />
-
     <!-- Fonts -->
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -33,6 +30,19 @@
   </head>
   <body>
     <div id="root"></div>
+    <script>
+      // Restore routes redirected by public/404.html on GitHub Pages.
+      (function (location) {
+        if (location.search.startsWith("?/")) {
+          var restored = location.search
+            .slice(2)
+            .split("&")
+            .map(function (part) { return part.replace(/~and~/g, "&"); })
+            .join("?");
+          window.history.replaceState(null, "", location.pathname.replace(/\/$/, "") + "/" + restored + location.hash);
+        }
+      })(window.location);
+    </script>
     <script type="module" src="/src/main.tsx"></script>
   </body>
 </html>
