@@ -17,15 +17,56 @@ type AuthErrorDetails = {
   status?: number;
 };
 
+function getAuthErrorDetails(error: unknown): AuthErrorDetails {
+  if (!error || typeof error !== "object") {
+    return typeof error === "string" ? { message: error } : {};
+  }
+
+  const candidate = error as Record<string, unknown>;
+  return {
+    code: typeof candidate.code === "string" ? candidate.code : undefined,
+    message:
+      typeof candidate.message === "string" ? candidate.message : undefined,
+    status:
+      typeof candidate.status === "number" ? candidate.status : undefined,
+  };
+}
+
 function isEmailRateLimitError(error: unknown) {
-  if (!error || typeof error !== "object") return false;
-  const { code, message, status } = error as AuthErrorDetails;
+  const { code, message, status } = getAuthErrorDetails(error);
   const details = `${code ?? ""} ${message ?? ""}`.toLowerCase();
   return (
     status === 429 ||
     details.includes("rate limit") ||
     details.includes("rate_limit")
   );
+}
+
+function getAuthErrorMessage(error: unknown, isSignUp: boolean) {
+  const { code, message, status } = getAuthErrorDetails(error);
+  const normalizedMessage = message?.trim();
+
+  if (code === "user_already_exists" || code === "email_exists") {
+    return "このメールアドレスは登録済みです。ログイン画面からお進みください。";
+  }
+
+  if (code === "email_address_invalid" || code === "validation_failed") {
+    return "メールアドレスを確認して、もう一度お試しください。";
+  }
+
+  if (
+    isSignUp &&
+    (status === 500 ||
+      code === "unexpected_failure" ||
+      !normalizedMessage ||
+      normalizedMessage === "{}" ||
+      normalizedMessage === "[object Object]")
+  ) {
+    return "認証メールを送信できませんでした。SupabaseのSMTP設定を確認するか、メール確認を使わない場合は「Confirm email」をオフにしてください。";
+  }
+
+  if (normalizedMessage) return normalizedMessage;
+  return "通信に失敗しました。時間をおいて、もう一度お試しください。";
 }
 
 function getStoredSentAt() {
@@ -124,7 +165,7 @@ export default function AuthPage({ mode }: { mode: "sign-in" | "sign-up" }) {
         return;
       }
 
-      const details = error as AuthErrorDetails;
+      const details = getAuthErrorDetails(error);
       if (details.code === "invalid_credentials") {
         toast({
           title: "メールアドレスまたはパスワードが違います",
@@ -155,10 +196,7 @@ export default function AuthPage({ mode }: { mode: "sign-in" | "sign-up" }) {
         title: isSignUp
           ? "アカウントを作成できませんでした"
           : "ログインできませんでした",
-        description:
-          error instanceof Error
-            ? error.message
-            : "時間をおいて、もう一度お試しください。",
+        description: getAuthErrorMessage(error, isSignUp),
         variant: "destructive",
       });
     } finally {

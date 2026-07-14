@@ -57,6 +57,8 @@ Supabase標準のメール送信機能は動作確認用で、プロジェクト
 
 アプリ側では同じブラウザからの再送を60秒間停止し、送信上限に達した場合は日本語の案内を表示します。ただし、プロジェクト全体の送信枠を増やすにはカスタムSMTPの設定が必要です。
 
+メール確認を使わず、登録直後からパスワードでログインできるようにする場合は、Supabase Dashboardの `Authentication → Sign In / Providers → Email` で `Confirm email` をオフにします。この場合、カスタムSMTPの設定は不要です。社内検証中はこの設定が最も簡単です。
+
 ## GitHub Pages setup
 
 リポジトリの Settings → Secrets and variables → Actions に次のRepository secretsを追加します。
